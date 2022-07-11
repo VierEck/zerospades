@@ -404,6 +404,7 @@ namespace spades {
 
 			void DrawPlayerName(Player& p, Vector4 col);
 			void DrawHottrackedPlayerName();
+			void DrawESP(Player& p);
 			void DrawPUBOVL();
 
 			void DrawPlayingTime();
@@ -433,8 +434,6 @@ namespace spades {
 			void TakeMapShot();
 
 			void NetLog(const char* format, ...);
-
-			static Client* globalInstance;
 
 		protected:
 			~Client();
@@ -529,9 +528,6 @@ namespace spades {
 			void LocalPlayerHurt(HurtType type, bool sourceGiven, Vector3 source) override;
 			void LocalPlayerBuildError(BuildFailureReason reason) override;
 			// IWorldListener end
-
-			static bool AdminFeaturesEnabled();
-			static bool SpectatorEspActive();
 		};
 	} // namespace client
 } // namespace spades

@@ -686,27 +686,6 @@ namespace spades {
 				AddDebugObjectToScene(hb.limbs[2], (tag & hit_Arms) ? color2 : color);
 			}
 
-			if (SpectatorEspActive()) { 
-				for (int i = 0; i < world->GetNumPlayerSlots(); ++i) {
-					if (world->GetPlayer(i)) {
-						Player& player = world->GetPlayer(i).value();
-						if (!&player)
-							continue;
-						if (!player.IsAlive() || player.IsSpectator() || &player == world->GetPlayer(followedPlayerId))
-							continue;
-
-						Vector4 color = ConvertColorRGBA(player.GetColor());
-
-						Player::HitBoxes hb = player.GetHitBoxes();
-						AddDebugObjectToScene(hb.head, color);
-						AddDebugObjectToScene(hb.torso, color);
-						AddDebugObjectToScene(hb.limbs[0], color);
-						AddDebugObjectToScene(hb.limbs[1], color);
-						AddDebugObjectToScene(hb.limbs[2], color);
-					}
-				}
-			}
-
 			renderer->EndScene();
 		}
 

@@ -70,6 +70,7 @@ DEFINE_SPADES_SETTING(cg_hideHud, "0");
 DEFINE_SPADES_SETTING(cg_playerNames, "2");
 DEFINE_SPADES_SETTING(cg_playerNameX, "0");
 DEFINE_SPADES_SETTING(cg_playerNameY, "0");
+DEFINE_SPADES_SETTING(cg_spectatorESP, "0");
 DEFINE_SPADES_SETTING(cg_hudBorderX, "16");
 DEFINE_SPADES_SETTING(cg_hudBorderY, "16");
 DEFINE_SPADES_SETTING(cg_dbgHitTestSize, "128");
@@ -350,6 +351,32 @@ namespace spades {
 			}
 		}
 
+		void Client::DrawESP(Player& p) {
+			Vector3 origin = p.GetEye();
+			float originY = p.GetInput().crouch ? 0.5F : 0.95F;
+			origin.z += originY;
+
+			Vector3 posxyz;
+			if (Project(origin, posxyz)) {
+				Vector2 pos = { posxyz.x, posxyz.y };
+
+				Vector3 dist = (origin - lastSceneDef.viewOrigin);
+				float angle = pow(atan2f(dist.z, dist.GetLength2D()), 2);
+				if (angle <= 1)
+					angle = 1;
+
+				float rectY = p.GetInput().crouch ? 0.654F : 1.0F;
+				//deuce height is 2,6 mapblocks when standing and 1,7 mapblocks when crouching. 1.7/2.6 ≈ 0.654
+
+				float persX = (500 / dist.GetLength());
+				float persY = (persX * 2 * rectY) / angle;
+
+				Vector4 color = ConvertColorRGBA(p.GetColor());
+				renderer->SetColorAlphaPremultiplied(MakeVector4(color.x, color.y, color.z, 1));
+				renderer->DrawOutlinedRect(pos.x + persX, pos.y + persY, pos.x - persX, pos.y - persY);
+			}
+		}
+
 		void Client::DrawPUBOVL() {
 			SPADES_MARK_FUNCTION();
 
@@ -368,6 +395,13 @@ namespace spades {
 					continue; // exclude invisible players
 
 				DrawPlayerName(p, GetPlayerColor(p));
+
+				if (cg_spectatorESP) {
+					if (&p == world->GetPlayer(followedPlayerId))
+						continue;
+
+					DrawESP(p);
+				}
 			}
 		}
 
