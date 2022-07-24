@@ -477,7 +477,6 @@ namespace spades {
 					weap = WeaponType::RIFLE_WEAPON;
 				}
 				net->SendJoin(team, weap, playerName, lastScore);
-				followedPlayerId = world->GetLocalPlayerIndex().value();
 			} else {
 				Player& p = world->GetLocalPlayer().value();
 				if (p.GetTeamId() != team)

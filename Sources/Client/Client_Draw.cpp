@@ -356,10 +356,6 @@ namespace spades {
 			float originY = p.GetInput().crouch ? 0.5F : 0.95F;
 			origin.z += originY;
 
-			float aimdown = world->GetPlayer(followedPlayerId)->GetWeaponInput().secondary &&
-							world->GetPlayer(followedPlayerId)->IsToolWeapon() ? 2.5F : 1.F;
-			SPADES_SETTING(cg_fov); float fov = cg_fov;
-
 			Vector3 posxyz;
 			if (Project(origin, posxyz)) {
 				Vector2 pos = { posxyz.x, posxyz.y };
@@ -371,6 +367,12 @@ namespace spades {
 
 				float rectY = p.GetInput().crouch ? 0.654F : 1.0F;
 				//deuce height is 2,6 mapblocks when standing and 1,7 mapblocks when crouching. 1.7/2.6 ≈ 0.654
+
+				float aimdown = world->GetPlayer(followedPlayerId)->GetWeaponInput().secondary &&
+					world->GetPlayer(followedPlayerId)->IsToolWeapon() &&
+					GetCameraMode() != ClientCameraMode::Free ? 2.5F : 1.F;
+
+				SPADES_SETTING(cg_fov); float fov = cg_fov;
 
 				float persX = (500 / dist.GetLength()) * aimdown / (fov * 0.0165F);
 				float persY = (persX * 2 * rectY) / angle;
@@ -401,7 +403,10 @@ namespace spades {
 				DrawPlayerName(p, GetPlayerColor(p));
 
 				if (cg_spectatorESP) {
-					if (&p == world->GetPlayer(followedPlayerId))
+					stmp::optional<Player&> pforNull = world->GetPlayer(followedPlayerId);
+					if (!pforNull)
+						followedPlayerId = world->GetLocalPlayerIndex().value();
+					if (&p == world->GetPlayer(followedPlayerId) && GetCameraMode() != ClientCameraMode::Free)
 						continue;
 
 					DrawESP(p);
