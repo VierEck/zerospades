@@ -220,7 +220,9 @@ namespace spades {
 		void Client::DrawPlayingTime() {
 			IFont& font = fontManager->GetMediumFont();
 			int now = (int)world->GetTime();
-			auto str = _Tr("Client", "Playing for {0}m{1}s", ToString(now / 60), ToString(now % 60));
+			int mins = now / 60;
+			int secs = now - mins * 60;
+			auto str = _Tr("Client", "Playing for {0}m{1}s", ToString(mins), ToString(secs));
 			auto size = font.Measure(str);
 			auto pos = MakeVector2((renderer->ScreenWidth() - size.x) * 0.5F, 48.0F - size.y);
 			font.DrawShadow(str, pos, 1.0F, MakeVector4(1, 1, 1, 1), MakeVector4(0, 0, 0, 0.5));
@@ -290,14 +292,19 @@ namespace spades {
 			}
 		}
 
-		Vector4 Client::GetPlayerColor(Player& p) {
+		Vector4 Client::GetPlayerColor(Player& player) {
 			Vector4 playerColor = MakeVector4(1, 1, 1, 1);
 
 			Vector3 origin = lastSceneDef.viewOrigin;
+			Vector3 eye = player.GetEye();
 
-			if (!map->CanSee(p.GetEye(), origin, FOG_DISTANCE))
-				playerColor = ModifyColor(p.GetColor());
-			if ((int)((p.GetEye() - origin).GetLength2D()) > FOG_DISTANCE)
+			// do map raycast
+			GameMap::RayCastResult mapResult;
+			mapResult = map->CastRay2(eye, (origin - eye).Normalize(), 256);
+
+			if (mapResult.hit && (mapResult.hitPos - eye).GetLength() < (origin - eye).GetLength())
+				playerColor = ModifyColor(player.GetColor());
+			if ((int)((eye - origin).GetLength2D()) > FOG_DISTANCE)
 				playerColor = MakeVector4(1, 0.75, 0, 1);
 
 			return playerColor;
@@ -384,6 +391,7 @@ namespace spades {
 		}
 
 		void Client::DrawPUBOVL() {
+
 			SPADES_MARK_FUNCTION();
 
 			for (size_t i = 0; i < world->GetNumPlayerSlots(); i++) {
@@ -395,6 +403,8 @@ namespace spades {
 				if (&p == world->GetLocalPlayer())
 					continue;
 				if (p.IsSpectator() || !p.IsAlive())
+					continue;
+				if (&p == &GetCameraTargetPlayer())
 					continue;
 
 				if (!p.GetFront().IsValid())
@@ -660,13 +670,11 @@ namespace spades {
 
 			IFont& font = fontManager->GetSmallFont();
 
+			float sh = renderer->ScreenHeight();
+
 			float x = 8.0F;
-			float y = cg_minimapSize;
-			if (y < 32)
-				y = 32;
-			if (y > 256)
-				y = 256;
-			y += 32;
+			float y = sh * 0.5F;
+			y -= 64.0F;
 
 			auto addLine = [&](const char* format, ...) {
 				char buf[256];
@@ -772,12 +780,20 @@ namespace spades {
 			SPADES_MARK_FUNCTION();
 
 			float sw = renderer->ScreenWidth();
+			float sh = renderer->ScreenHeight();
 
 			IFont& font = fontManager->GetGuiFont();
 
 			float x = sw - 8.0F;
+			float minY = sh * 0.5F;
+			minY -= 64.0F;
+
 			float y = cg_minimapSize;
-			y += 64;
+			if (y < minY)
+				y = minY;
+			if (y > 256.0F)
+				y = 256.0F;
+			y += 32.0F;
 
 			auto addLine = [&](const std::string& text) {
 				Vector2 pos = MakeVector2(x, y);
@@ -790,10 +806,10 @@ namespace spades {
 			auto cameraMode = GetCameraMode();
 
 			if (HasTargetPlayer(cameraMode)) {
-				auto targetId = GetCameraTargetPlayerId();
+				int playerId = GetCameraTargetPlayerId();
 
 				addLine(_Tr("Client", "Following {0} [#{1}]",
-					  world->GetPlayerName(targetId), targetId));
+					  world->GetPlayerName(playerId), playerId));
 			}
 
 			y += 10.0F;
@@ -943,34 +959,37 @@ namespace spades {
 					if (IsFirstPerson(GetCameraMode()))
 						DrawFirstPersonHUD();
 
+					// draw map
+					if (!largeMapView->IsZoomed())
+						mapView->Draw();
+
 					if (!p->IsSpectator()) { // player is not spectator
+						if (cg_playerStats)
+							DrawPlayerStats();
+						if (!p->IsToolBlock() && !debugHitTestZoom)
+							DrawHitTestDebugger();
+
 						if (p->IsAlive()) {
 							DrawJoinedAlivePlayerHUD(x, y, sw, sh);
 						} else {
 							DrawDeadPlayerHUD();
 							DrawSpectateHUD();
 						}
-
-						if (cg_playerStats)
-							DrawPlayerStats();
 					} else {
 						DrawSpectateHUD();
-						DrawPUBOVL();
+						DrawPubOVL();
 					}
 
 					chatWindow->Draw();
 					killfeedWindow->Draw();
-
 					DrawAlert();
 
-					if ((!p->IsSpectator() && !p->IsToolBlock()) || debugHitTestZoom)
+					if (debugHitTestZoom)
 						DrawHitTestDebugger();
 
-					// map view should come in front
+					// large map view should come in front
 					if (largeMapView->IsZoomed())
 						largeMapView->Draw();
-					else
-						mapView->Draw();
 				}
 
 				centerMessageView->Draw();
@@ -985,7 +1004,6 @@ namespace spades {
 
 				scoreboard->Draw();
 				centerMessageView->Draw();
-
 				DrawAlert();
 			}
 

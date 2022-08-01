@@ -460,9 +460,9 @@ namespace spades {
 				SetSelectedTool(t);
 			}
 
-			// send orientation packet - 20 per second
+			// send orientation packet - 120 per second
 			Vector3 curFront = player.GetFront();
-			if (curFront != lastFront && time - lastOriSentTime > (1.0F / 20.0F)) {
+			if (curFront != lastFront && time - lastOriSentTime > (1.0F / 120.0F)) {
 				net->SendOrientation(curFront);
 				lastOriSentTime = time;
 				lastFront = curFront;
@@ -755,6 +755,10 @@ namespace spades {
 				Vector3 o = victim.GetFront();
 				followAndFreeCameraState.yaw = atan2f(o.y, o.x) + DEG2RAD(180);
 				followAndFreeCameraState.pitch = DEG2RAD(30);
+
+				// play death sound
+				Handle<IAudioChunk> c = audioDevice->RegisterSound("Sounds/Player/Death.opus");
+				audioDevice->PlayLocal(c.GetPointerOrNull(), AudioParam());
 			}
 
 			// Register local kills
@@ -989,7 +993,6 @@ namespace spades {
 				if ((bool)cg_analyze) {
 					char buf[256];
 
-					auto nameStr = hurtPlayer.GetName();
 					int dist = (int)(by.GetPosition() - hurtPlayer.GetPosition()).GetLength();
 					float dt = (world->GetTime() - lastHitTime) * 1000;
 
@@ -999,15 +1002,17 @@ namespace spades {
 						case HitTypeHead: hitType = "Head"; break;
 						case HitTypeArms:
 						case HitTypeLegs: hitType = "Limb"; break;
-						default: hitType = "Melee"; break;
+						default: hitType = "Head"; break;
 					}
 
+					std::string weapoName = by.IsToolSpade() ? "Melee" : by.GetWeapon().GetName();
+
 					if (dt > 0.0F && lastHitTime > 0.0F)
-						sprintf(buf, "Bullet hit %s dist: %d blocks dT: %.0fms %s",
-							nameStr.c_str(), dist, dt, hitType.c_str());
+						sprintf(buf, "%s hit %s dist: %d blocks dT: %.0fms",
+							weapoName.c_str(), hitType.c_str(), dist, dt);
 					else
-						sprintf(buf, "Bullet hit %s dist: %d blocks dT: NA %s",
-							nameStr.c_str(), dist, hitType.c_str());
+						sprintf(buf, "%s hit %s dist: %d blocks dT: NA",
+							weapoName.c_str(), hitType.c_str(), dist);
 
 					scriptedUI->RecordChatLog(buf);
 					chatWindow->AddMessage(buf);
@@ -1105,10 +1110,14 @@ namespace spades {
 			              : clientPlayer->GetMuzzlePositionInFirstPersonView();
 
 			float vel;
+			bool shotgun = false;
 			switch (player.GetWeapon().GetWeaponType()) {
 				case RIFLE_WEAPON: vel = 700.0F; break;
 				case SMG_WEAPON: vel = 360.0F; break;
-				case SHOTGUN_WEAPON: vel = 550.0F; break;
+				case SHOTGUN_WEAPON:
+					vel = 550.0F;
+					shotgun = true;
+					break;
 				default: vel = 0.0F; break;
 			}
 
@@ -1116,8 +1125,8 @@ namespace spades {
 			if (isFirstPerson)
 				vel *= 2.0F;
 
-			AddLocalEntity(stmp::make_unique<Tracer>(*this, muzzlePos, hitPos, vel));
-			AddLocalEntity(stmp::make_unique<MapViewTracer>(muzzlePos, hitPos, vel));
+			AddLocalEntity(stmp::make_unique<Tracer>(*this, muzzlePos, hitPos, vel, shotgun));
+			AddLocalEntity(stmp::make_unique<MapViewTracer>(muzzlePos, hitPos, vel, shotgun));
 		}
 
 		void Client::BlocksFell(std::vector<IntVector3> blocks) {
