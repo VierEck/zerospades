@@ -484,6 +484,7 @@ namespace spades {
 			void TeamWon(int);
 			void JoinedGame();
 			void LocalPlayerCreated();
+			void PlayBlockDestroySound(IntVector3);
 			void PlayerDestroyedBlock(IntVector3);
 			void PlayerDestroyedBlockWithWeaponOrTool(IntVector3);
 			void PlayerDiggedBlock(IntVector3);

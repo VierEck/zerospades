@@ -281,8 +281,8 @@ namespace spades {
 		void Client::UpdateLocalSpectator(float dt) {
 			SPADES_MARK_FUNCTION();
 
-			auto& sharedState = followAndFreeCameraState;
 			auto& freeState = freeCameraState;
+			auto& sharedState = followAndFreeCameraState;
 
 			Vector3 lastPos = freeState.position;
 			freeState.velocity *= powf(0.3F, dt);
@@ -300,10 +300,10 @@ namespace spades {
 			freeState.position = lastPos + freeState.velocity * dt;
 
 			GameMap::RayCastResult minResult;
-			float minDist = 1.E+10F;
+			float minDist = 1.0E+10F;
 			Vector3 minShift;
 
-			auto const direction = freeState.position - lastPos;
+			Vector3 const direction = freeState.position - lastPos;
 
 			// check collision
 			if (freeState.velocity.GetLength() < 0.01F) {
@@ -330,7 +330,7 @@ namespace spades {
 				}
 			}
 
-			if (minDist < 1.E+9F) {
+			if (minDist < 1.0E+9F) {
 				Vector3 hitPos = minResult.hitPos - minShift;
 				Vector3 normal = MakeVector3(minResult.normal);
 				freeState.position = hitPos + (normal * 0.05F);
@@ -342,24 +342,22 @@ namespace spades {
 
 			// acceleration
 			Vector3 front;
-			Vector3 up = {0, 0, -1};
-
 			front.x = -cosf(sharedState.yaw) * cosf(sharedState.pitch);
 			front.y = -sinf(sharedState.yaw) * cosf(sharedState.pitch);
 			front.z = sinf(sharedState.pitch);
 
-			Vector3 right = -Vector3::Cross(up, front).Normalize();
-			Vector3 up2 = Vector3::Cross(right, front).Normalize();
+			Vector3 right = -Vector3::Cross(MakeVector3(0, 0, -1), front).Normalize();
+			Vector3 up = Vector3::Cross(right, front).Normalize();
 
-			float f = dt * 10.0F;
-			if (playerInput.sprint)
-				f *= 3.0F;
-			else if (playerInput.sneak)
+			float f = dt * 32.0F;
+			if (playerInput.sneak)
 				f *= 0.5F;
+			else if (playerInput.sprint)
+				f *= 3.0F;
 
 			front *= f;
 			right *= f;
-			up2 *= f;
+			up *= f;
 
 			if (playerInput.moveForward)
 				freeState.velocity += front;
@@ -372,9 +370,9 @@ namespace spades {
 				freeState.velocity += right;
 
 			if (playerInput.jump)
-				freeState.velocity += up2;
+				freeState.velocity += up;
 			else if (playerInput.crouch)
-				freeState.velocity -= up2;
+				freeState.velocity -= up;
 
 			SPAssert(freeState.velocity.GetLength() < 100.0F);
 		}
@@ -424,7 +422,7 @@ namespace spades {
 			}
 
 			if (hasDelayedReload) {
-				world->GetLocalPlayer()->Reload();
+				player.Reload();
 				net->SendReload();
 				hasDelayedReload = false;
 			}
@@ -456,7 +454,7 @@ namespace spades {
 						case Player::ToolWeapon: t = Player::ToolBlock; break;
 						case Player::ToolGrenade: t = Player::ToolWeapon; break;
 					}
-				} while (!world->GetLocalPlayer()->IsToolSelectable(t));
+				} while (!player.IsToolSelectable(t));
 				SetSelectedTool(t);
 			}
 
@@ -824,12 +822,17 @@ namespace spades {
 
 			// add chat message
 			std::string s, cause;
-
 			s += ChatWindow::TeamColorMessage(killer.GetName(), killer.GetTeamId());
 			s += " [";
-			Weapon& w = killer.GetWeapon(); // only used in case of KillTypeWeapon
 			switch (kt) {
-				case KillTypeWeapon: cause += _Tr("Client", w.GetName().c_str()); break;
+				case KillTypeWeapon:
+					switch (killer.GetWeapon().GetWeaponType()) {
+						case RIFLE_WEAPON: cause += _Tr("Client", "Rifle"); break;
+						case SMG_WEAPON: cause += _Tr("Client", "SMG"); break;
+						case SHOTGUN_WEAPON: cause += _Tr("Client", "Shotgun"); break;
+						default: SPUnreachable();
+					}
+					break;
 				case KillTypeFall: cause += _Tr("Client", "Fall"); break;
 				case KillTypeMelee: cause += _Tr("Client", "Melee"); break;
 				case KillTypeGrenade: cause += _Tr("Client", "Grenade"); break;
@@ -855,11 +858,11 @@ namespace spades {
 			// log to netlog
 			if (&killer != &victim) {
 				NetLog("%s (%s) [%s] %s (%s)", killer.GetName().c_str(),
-				       world->GetTeam(killer.GetTeamId()).name.c_str(), cause.c_str(),
-				       victim.GetName().c_str(), world->GetTeam(victim.GetTeamId()).name.c_str());
+				       killer.GetTeamName().c_str(), cause.c_str(),
+				       victim.GetName().c_str(), victim.GetTeamName().c_str());
 			} else {
 				NetLog("%s (%s) [%s]", killer.GetName().c_str(),
-				       world->GetTeam(killer.GetTeamId()).name.c_str(), cause.c_str());
+					killer.GetTeamName().c_str(), cause.c_str());
 			}
 
 			// show big message if player is involved
@@ -945,7 +948,6 @@ namespace spades {
 
 			if (!IsMuted() && !hitScanState.hasPlayedNormalHitSound) {
 				Handle<IAudioChunk> c;
-
 				if (type == HitTypeMelee) {
 					c = audioDevice->RegisterSound("Sounds/Weapons/Spade/HitPlayer.opus");
 					audioDevice->Play(c.GetPointerOrNull(), hitPos, AudioParam());
@@ -1028,9 +1030,10 @@ namespace spades {
 					hitScanState.hasPlayedHeadshotSound = true;
 				}
 
-				lastHitTime = world->GetTime();
 				hitFeedbackIconState = 1.0F;
 				hitFeedbackFriendly = by.IsTeamMate(&hurtPlayer);
+
+				lastHitTime = world->GetTime();
 			}
 		}
 
@@ -1045,10 +1048,6 @@ namespace spades {
 
 			if (blockPos.z == 63) {
 				if (!IsMuted()) {
-					AudioParam param;
-					param.volume = 2.0F;
-					param.pitch = 0.9F + SampleRandomFloat() * 0.2F;
-
 					Handle<IAudioChunk> c;
 					switch (SampleRandomInt(0, 3)) {
 						case 0: c = audioDevice->RegisterSound("Sounds/Weapons/Impacts/Water1.opus");
@@ -1060,15 +1059,17 @@ namespace spades {
 						case 3: c = audioDevice->RegisterSound("Sounds/Weapons/Impacts/Water4.opus");
 							break;
 					}
+					AudioParam param;
+					param.volume = 2.0F;
+					param.pitch = 0.9F + SampleRandomFloat() * 0.2F;
 					audioDevice->Play(c.GetPointerOrNull(), shiftedHitPos, param);
 				}
 			} else {
 				if (!IsMuted()) {
-					AudioParam param;
-					param.volume = 2.0F;
-
 					Handle<IAudioChunk> c;
 					c = audioDevice->RegisterSound("Sounds/Weapons/Impacts/Block.opus");
+					AudioParam param;
+					param.volume = 2.0F;
 					audioDevice->Play(c.GetPointerOrNull(), shiftedHitPos, param);
 
 					param.pitch = 0.9F + SampleRandomFloat() * 0.2F;
@@ -1173,7 +1174,6 @@ namespace spades {
 			if (origin.z > 63.0F) {
 				if (!IsMuted()) {
 					Handle<IAudioChunk> c;
-
 					c = audioDevice->RegisterSound("Sounds/Weapons/Grenade/WaterExplode.opus");
 					AudioParam param;
 					param.volume = 10.0F;
@@ -1195,7 +1195,6 @@ namespace spades {
 
 				if (!IsMuted()) {
 					Handle<IAudioChunk> c, cs;
-
 					switch (SampleRandomInt(0, 1)) {
 						case 0:
 							c = audioDevice->RegisterSound("Sounds/Weapons/Grenade/Explode1.opus");
