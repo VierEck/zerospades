@@ -93,6 +93,9 @@ DEFINE_SPADES_SETTING(cg_keyAutoFocus, "MiddleMouseButton");
 SPADES_SETTING(s_volume);
 SPADES_SETTING(cg_debugHitTest);
 
+DEFINE_SPADES_SETTING(cg_keyPubovl, "F3"); //vier added: /pubovl macro
+DEFINE_SPADES_SETTING(cg_stringPubovl, "/pubovl");
+
 namespace spades {
 	namespace client {
 
@@ -394,6 +397,10 @@ namespace spades {
 
 				if (world->GetLocalPlayer()) {
 					Player& p = world->GetLocalPlayer().value();
+
+					if (CheckKey(cg_keyPubovl, name) && down) {//vier added: /pubovl macro
+						net->SendChat(cg_stringPubovl, true);
+					}
 
 					if (name == "-" || name == "+") {
 						int volume = s_volume;
