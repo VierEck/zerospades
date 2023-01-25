@@ -38,6 +38,7 @@
 DEFINE_SPADES_SETTING(cg_minimapSize, "128");
 DEFINE_SPADES_SETTING(cg_minimapPlayerColor, "1");
 DEFINE_SPADES_SETTING(cg_minimapPlayerIcon, "1");
+DEFINE_SPADES_SETTING(cg_minimapCoords, "1");
 
 using std::pair;
 using stmp::optional;
@@ -46,17 +47,17 @@ namespace spades {
 	namespace client {
 		namespace {
 			optional<pair<Vector2, Vector2>> ClipLineSegment(
-				const pair<Vector2, Vector2>& inLine,  const Plane2& plane) {
-				const float distance1 = plane.GetDistanceTo(inLine.first);
-				const float distance2 = plane.GetDistanceTo(inLine.second);
-				int bits = (distance1 > 0 ? 1 : 0) | (distance2 > 0 ? 2 : 0);
+				const pair<Vector2, Vector2>& inLine, const Plane2& plane) {
+				const float d1 = plane.GetDistanceTo(inLine.first);
+				const float d2 = plane.GetDistanceTo(inLine.second);
+				int bits = (d1 > 0 ? 1 : 0) | (d2 > 0 ? 2 : 0);
 				switch (bits) {
 					case 0: return {};
 					case 3: return inLine;
 				}
 
-				const float frac = distance1 / (distance1 - distance2);
-				Vector2 intersection = Mix(inLine.first, inLine.second, frac);
+				const float fraction = d1 / (d1 - d2); // hmm
+				Vector2 intersection = Mix(inLine.first, inLine.second, fraction);
 				if (bits == 1)
 					return std::make_pair(inLine.first, intersection);
 				else
@@ -65,8 +66,7 @@ namespace spades {
 
 			optional<pair<Vector2, Vector2>> ClipLineSegment(const pair<Vector2,
 				Vector2>& inLine, const AABB2& rect) {
-				optional<pair<Vector2, Vector2>> line =
-				  ClipLineSegment(inLine, Plane2{1, 0, -rect.GetMinX()});
+				auto line = ClipLineSegment(inLine, Plane2{1, 0, -rect.GetMinX()});
 				if (!line)
 					return line;
 				line = ClipLineSegment(*line, Plane2{-1, 0, rect.GetMaxX()});
@@ -145,8 +145,10 @@ namespace spades {
 			float c = (rotation != 0.0F) ? cosf(rotation) : 1.0F;
 			float s = (rotation != 0.0F) ? sinf(rotation) : 0.0F;
 			static const float coords[][2] = {{-1, -1}, {1, -1}, {-1, 1}};
-			Vector2 u = MakeVector2(img.GetWidth() * 0.5F, 0.0F);
-			Vector2 v = MakeVector2(0.0F, img.GetHeight() * 0.5F);
+			const AABB2 inRect{0.0F, 0.0F, img.GetWidth(), img.GetHeight()};
+
+			Vector2 u = MakeVector2(inRect.GetMaxX() * 0.5F, 0.0F);
+			Vector2 v = MakeVector2(0.0F, inRect.GetMaxY() * 0.5F);
 
 			Vector2 vt[3];
 			for (int i = 0; i < 3; i++) {
@@ -155,8 +157,7 @@ namespace spades {
 				vt[i].y = scrPos.y + ss.x * s + ss.y * c;
 			}
 
-			renderer.DrawImage(img, vt[0], vt[1], vt[2],
-				AABB2(0, 0, img.GetWidth(), img.GetHeight()));
+			renderer.DrawImage(img, vt[0], vt[1], vt[2], inRect);
 		}
 
 		void MapView::SwitchScale() {
@@ -436,7 +437,7 @@ namespace spades {
 
 				// Draw the focused player's view
 				if (&p == &focusPlayer) {
-					if (p.IsScoped())
+					if (p.IsZoomed())
 						viewIcon = renderer.RegisterImage("Gfx/Map/ViewADS.png");
 
 					renderer.SetColorAlphaPremultiplied(iconColorF * 0.9F);
@@ -449,10 +450,10 @@ namespace spades {
 				}
 
 				Vector3 o = p.GetFront2D();
-				float ang = atan2f(o.y, o.x) + M_PI_F * 0.5F;
+				float playerAngle = atan2f(o.y, o.x) + M_PI_F * 0.5F;
 
 				renderer.SetColorAlphaPremultiplied(iconColorF);
-				DrawIcon(p.GetPosition(), *playerIcon, ang);
+				DrawIcon(p.GetPosition(), *playerIcon, playerAngle);
 			}
 
 			stmp::optional<IGameMode&> mode = world->GetMode();
@@ -462,7 +463,7 @@ namespace spades {
 				Handle<IImage> baseIcon = renderer.RegisterImage("Gfx/Map/CommandPost.png");
 				for (int tId = 0; tId < 2; tId++) {
 					CTFGameMode::Team& team = ctf.GetTeam(tId);
-					Vector4 teamColorF = ModifyColor(world->GetTeam(tId).color) * alpha;
+					Vector4 teamColorF = ModifyColor(world->GetTeamColor(tId)) * alpha;
 
 					// draw base
 					renderer.SetColorAlphaPremultiplied(teamColorF);
@@ -474,7 +475,7 @@ namespace spades {
 						DrawIcon(team.flagPos, *intelIcon);
 					} else if (localPlayer.GetTeamId() == (1 - tId)) {
 						// local player's team is carrying
-						size_t cId = ctf.GetTeam(1 - tId).carrier;
+						size_t cId = ctf.GetTeam(1 - tId).carrierId;
 
 						// in some game modes, carrier becomes invalid
 						if (cId < world->GetNumPlayerSlots()) {
@@ -493,8 +494,8 @@ namespace spades {
 				for (int i = 0; i < tc.GetNumTerritories(); i++) {
 					TCGameMode::Territory& t = tc.GetTerritory(i);
 					IntVector3 teamColor = (t.ownerTeamId < 2)
-						? world->GetTeam(t.ownerTeamId).color
-						: MakeIntVector3(128);
+						? world->GetTeamColor(t.ownerTeamId)
+						: MakeIntVector3(128, 128, 128);
 
 					Vector4 teamColorF = ModifyColor(teamColor) * alpha;
 					renderer.SetColorAlphaPremultiplied(teamColorF);
@@ -550,16 +551,26 @@ namespace spades {
 			}
 
 			// draw map sector in team color below minimap
-			if (!largeMap) {
+			if (!largeMap && cg_minimapCoords) {
 				IFont& font = client->fontManager->GetGuiFont();
 				auto gridStr = ToGrid(focusPlayerPos.x, focusPlayerPos.y);
-				Vector2 pos = {(outRect.min.x + outRect.max.x) * 0.5F, outRect.max.y + 2.0F};
-				pos.x -= font.Measure(gridStr).x * 0.5F;
+				Vector2 size = font.Measure(gridStr);
+				Vector2 pos = outRect.min;
+				if ((int)cg_minimapCoords < 2) {
+					pos.x += ((outRect.GetWidth() - size.x) * 0.5F);
+					pos.y = outRect.GetMaxY() + size.y * 0.5F - 8.0F;
+				} else {
+					pos.x = (pos.x - 8.0F) - size.x + 2.0F;
+					pos.y += ((outRect.GetHeight() - size.y) * 0.5F);
+				}
+
 				Vector4 color = ConvertColorRGBA(focusPlayer.GetColor());
-				color.x = Mix(color.x, 1.0F, 0.5F);
-				color.y = Mix(color.y, 1.0F, 0.5F);
-				color.z = Mix(color.z, 1.0F, 0.5F);
-				font.DrawShadow(gridStr, pos, 1.0F, color, MakeVector4(0, 0, 0, 0.8F));
+				float luminosity = color.x + color.y + color.z;
+				Vector4 shadowColor = (luminosity > 0.9F)
+					? MakeVector4(0, 0, 0, 0.8F)
+					: MakeVector4(1, 1, 1, 0.8F);
+
+				font.DrawShadow(gridStr, pos, 1.0F, color, shadowColor);
 			}
 		}
 

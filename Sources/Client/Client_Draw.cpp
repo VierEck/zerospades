@@ -67,15 +67,17 @@ DEFINE_SPADES_SETTING(cg_screenshotFormat, "jpeg");
 DEFINE_SPADES_SETTING(cg_stats, "0");
 DEFINE_SPADES_SETTING(cg_playerStats, "0");
 DEFINE_SPADES_SETTING(cg_hideHud, "0");
+DEFINE_SPADES_SETTING(cg_hudAmmoStyle, "0");
+DEFINE_SPADES_SETTING(cg_hudBorderX, "16");
+DEFINE_SPADES_SETTING(cg_hudBorderY, "16");
 DEFINE_SPADES_SETTING(cg_playerNames, "2");
 DEFINE_SPADES_SETTING(cg_playerNameX, "0");
 DEFINE_SPADES_SETTING(cg_playerNameY, "0");
-DEFINE_SPADES_SETTING(cg_spectatorESP, "0");
-DEFINE_SPADES_SETTING(cg_hudBorderX, "16");
-DEFINE_SPADES_SETTING(cg_hudBorderY, "16");
 DEFINE_SPADES_SETTING(cg_dbgHitTestSize, "128");
 DEFINE_SPADES_SETTING(cg_damageIndicators, "1");
 DEFINE_SPADES_SETTING(cg_hurtScreenEffects, "1");
+
+DEFINE_SPADES_SETTING(cg_spectatorESP, "0");
 
 SPADES_SETTING(cg_minimapSize);
 
@@ -85,7 +87,7 @@ namespace spades {
 		enum class ScreenshotFormat { JPG, TGA, PNG };
 
 		namespace {
-			ScreenshotFormat GetScreenshotFormat(std::string format) {
+			ScreenshotFormat GetScreenshotFormat(const std::string& format) {
 				if (EqualsIgnoringCase(format, "jpeg"))
 					return ScreenshotFormat::JPG;
 				else if (EqualsIgnoringCase(format, "tga"))
@@ -127,24 +129,25 @@ namespace spades {
 			renderer->FrameDone();
 
 			Handle<Bitmap> bmp = renderer->ReadBitmap();
-			std::string msg = sceneOnly ? "Sceneshot" : "Screenshot";
 
 			try {
 				auto name = ScreenShotPath();
 				bmp->Save(name);
 
-				msg += _Tr("Client", " saved: {0}", name);
+				std::string msg = sceneOnly
+					? _Tr("Client", "Sceneshot saved: {0}", name)
+					: _Tr("Client", "Screenshot saved: {0}", name);
 				ShowAlert(msg, AlertType::Notice);
 
 				Handle<IAudioChunk> c = audioDevice->RegisterSound("Sounds/Feedback/Screenshot.opus");
 				audioDevice->PlayLocal(c.GetPointerOrNull(), AudioParam());
 			} catch (const Exception& ex) {
-				msg += _Tr("Client", " failed: ");
+				auto msg = _Tr("Client", "Screenshot failed: ");
 				msg += ex.GetShortMessage();
 				ShowAlert(msg, AlertType::Error);
 				SPLog("Screenshot failed: %s", ex.what());
 			} catch (const std::exception& ex) {
-				msg += _Tr("Client", " failed: ");
+				auto msg = _Tr("Client", "Screenshot failed: ");
 				msg += ex.what();
 				ShowAlert(msg, AlertType::Error);
 				SPLog("Screenshot failed: %s", ex.what());
@@ -190,15 +193,15 @@ namespace spades {
 
 			Handle<IImage> img = renderer->RegisterImage("Gfx/Title/Logo.png");
 			float scale = fabsf(sinf(time));
-			Vector2 siz = {img->GetWidth(), img->GetHeight()};
-			siz *= std::min(1.0F, sw / siz.x);
-			siz *= std::min(1.0F, sh / siz.y);
-			siz *= 1.0F - (scale * (scale * 0.25F));
+			Vector2 size = {img->GetWidth(), img->GetHeight()};
+			size *= std::min(1.0F, sw / size.x);
+			size *= std::min(1.0F, sh / size.y);
+			size *= 1.0F - (scale * (scale * 0.25F));
 
-			Vector2 pos = (MakeVector2(sw, sh) - siz) * 0.5F;
+			Vector2 pos = (MakeVector2(sw, sh) - size) * 0.5F;
 
 			renderer->SetColorAlphaPremultiplied(MakeVector4(1, 1, 1, 1));
-			renderer->DrawImage(img, AABB2(pos.x, pos.y, siz.x, siz.y));
+			renderer->DrawImage(img, AABB2(pos.x, pos.y, size.x, size.y));
 		}
 
 		void Client::DrawStartupScreen() {
@@ -218,14 +221,17 @@ namespace spades {
 		}
 
 		void Client::DrawPlayingTime() {
-			IFont& font = fontManager->GetMediumFont();
+			float sw = renderer->ScreenWidth();
+
 			int now = (int)world->GetTime();
 			int mins = now / 60;
 			int secs = now - mins * 60;
-			auto str = _Tr("Client", "Playing for {0}m{1}s", ToString(mins), ToString(secs));
-			auto size = font.Measure(str);
-			auto pos = MakeVector2((renderer->ScreenWidth() - size.x) * 0.5F, 48.0F - size.y);
-			font.DrawShadow(str, pos, 1.0F, MakeVector4(1, 1, 1, 1), MakeVector4(0, 0, 0, 0.5));
+			char buf[64];
+			sprintf(buf, "%d:%.02d", mins, secs);
+			IFont& font = fontManager->GetMediumFont();
+			Vector2 size = font.Measure(buf);
+			Vector2 pos = MakeVector2((sw - size.x) * 0.5F, 48.0F - size.y);
+			font.DrawShadow(buf, pos, 1.0F, MakeVector4(1, 1, 1, 1), MakeVector4(0, 0, 0, 0.5));
 		}
 
 		void Client::DrawHurtSprites() {
@@ -264,7 +270,7 @@ namespace spades {
 				Vector2 v3 = base + sideVect1;
 
 				renderer->SetColorAlphaPremultiplied(MakeVector4(0, 0, 0, alpha));
-				renderer->DrawImage(img, v1, v2, v3, AABB2(0, 8.0F, size.x, size.y));
+				renderer->DrawImage(img, v1, v2, v3, AABB2(0, 8, size.x, size.y));
 			}
 		}
 
@@ -276,18 +282,22 @@ namespace spades {
 
 			Player& p = GetWorld()->GetLocalPlayer().value();
 
+			float hpper = p.GetHealth() / 100.0F;
+
 			float wTime = world->GetTime();
+			float timeSinceLastHurt = wTime - lastHurtTime;
+
 			const float fadeOutTime = 0.35F;
-			if (wTime - lastHurtTime < fadeOutTime && wTime >= lastHurtTime) {
-				float per = (wTime - lastHurtTime) / fadeOutTime;
+			if (wTime >= lastHurtTime && timeSinceLastHurt < fadeOutTime) {
+				float per = timeSinceLastHurt / fadeOutTime;
 				per = 1.0F - per;
-				per *= 0.3F + (1.0F - p.GetHealth() / 100.0F) * 0.7F;
+				per *= 0.3F + (1.0F - hpper) * 0.7F;
 				per = std::min(per, 0.9F);
 				per = 1.0F - per;
 				renderer->MultiplyScreenColor({1, per, per});
 
-				float p = (1.0F - per) * 0.1F;
-				renderer->SetColorAlphaPremultiplied(MakeVector4(p, 0, 0, p));
+				per = (1.0F - per) * 0.1F;
+				renderer->SetColorAlphaPremultiplied({per, 0, 0, per});
 				renderer->DrawImage(nullptr, AABB2(0, 0, sw, sh));
 			}
 		}
@@ -295,17 +305,23 @@ namespace spades {
 		Vector4 Client::GetPlayerColor(Player& player) {
 			Vector4 playerColor = MakeVector4(1, 1, 1, 1);
 
-			Vector3 origin = lastSceneDef.viewOrigin;
-			Vector3 eye = player.GetEye();
+			Vector3 eye = lastSceneDef.viewOrigin;
+			Vector3 dir = player.GetEye() - eye;
+
+			float dist = dir.GetLength2D();
+			dir = dir.Normalize();
 
 			// do map raycast
 			GameMap::RayCastResult mapResult;
-			mapResult = map->CastRay2(eye, (origin - eye).Normalize(), 256);
+			mapResult = map->CastRay2(eye, dir, 256);
 
-			if (mapResult.hit && (mapResult.hitPos - eye).GetLength() < (origin - eye).GetLength())
-				playerColor = ModifyColor(player.GetColor());
-			if ((int)((eye - origin).GetLength2D()) > FOG_DISTANCE)
+			if (dist > FOG_DISTANCE) {
 				playerColor = MakeVector4(1, 0.75, 0, 1);
+			} else if (mapResult.hit) {
+				float hitDist = (mapResult.hitPos - eye).GetLength2D();
+				if (hitDist < FOG_DISTANCE && hitDist < dist)
+					playerColor = ConvertColorRGBA(player.GetColor());
+			}
 
 			return playerColor;
 		}
@@ -323,33 +339,31 @@ namespace spades {
 				pos.y += (int)cg_playerNameY;
 
 				char buf[64];
-				auto playerNameStr = player.GetName();
-				sprintf(buf, "%s", playerNameStr.c_str());
+				auto nameStr = player.GetName();
+				sprintf(buf, "%s", nameStr.c_str());
 				if (cg_playerNames == 1) {
-					Vector3 diff = (origin - lastSceneDef.viewOrigin);
-					if ((int)diff.GetLength2D() <= FOG_DISTANCE)
-						sprintf(buf, "%s [%.1f]", playerNameStr.c_str(), diff.GetLength());
+					Vector3 diff = origin - lastSceneDef.viewOrigin;
+					float dist = diff.GetLength2D();
+					if (dist < FOG_DISTANCE)
+						sprintf(buf, "%s [%.1f]", nameStr.c_str(), dist);
 				}
 
 				IFont& font = fontManager->GetGuiFont();
-				auto size = font.Measure(buf);
+				Vector2 size = font.Measure(buf);
 				pos.x -= size.x * 0.5F;
 				pos.y -= size.y;
 
-				renderer->SetColorAlphaPremultiplied(MakeVector4(0, 0, 0, 0.25));
-				renderer->DrawFilledRect(pos.x - 2.0F, pos.y + 2.0F, pos.x + size.x + 2.0F,
-				                         pos.y + size.y - 2.0F);
+				float luminosity = color.x + color.y + color.z;
+				Vector4 shadowColor = (luminosity > 0.9F)
+					? MakeVector4(0, 0, 0, 0.8F)
+					: MakeVector4(1, 1, 1, 0.8F);
 
-				font.DrawShadow(buf, pos, 1.0F, color, MakeVector4(0, 0, 0, 0.5));
+				font.DrawShadow(buf, pos, 1.0F, color, shadowColor);
 			}
 		}
 
 		void Client::DrawHottrackedPlayerName() {
 			SPADES_MARK_FUNCTION();
-
-			Player& p = GetWorld()->GetLocalPlayer().value();
-			if (p.IsSpectator())
-				return;
 
 			auto hottracked = HotTrackedPlayer();
 			if (hottracked) {
@@ -394,21 +408,20 @@ namespace spades {
 
 			SPADES_MARK_FUNCTION();
 
+			Player& player = GetCameraTargetPlayer();
+
 			for (size_t i = 0; i < world->GetNumPlayerSlots(); i++) {
 				auto maybePlayer = world->GetPlayer(i);
-				if (!maybePlayer)
+				if (maybePlayer == player || !maybePlayer)
 					continue;
 
 				Player& p = maybePlayer.value();
-				if (&p == world->GetLocalPlayer())
-					continue;
 				if (p.IsSpectator() || !p.IsAlive())
 					continue;
-				if (&p == &GetCameraTargetPlayer())
-					continue;
 
-				if (!p.GetFront().IsValid())
-					continue; // exclude invisible players
+				// Do not draw a player with an invalid state
+				if (p.GetFront().GetSquaredLength() < 0.01F)
+					continue;
 
 				DrawPlayerName(p, GetPlayerColor(p));
 
@@ -437,19 +450,19 @@ namespace spades {
 			if (GetAimDownZoomScale() == 1)
 				spread *= 2;
 
-			float size = sh * 0.5F;
 			float fovY = tanf(lastSceneDef.fovY * 0.5F);
+			float spreadDistance = spread * (sh * 0.5F) / fovY;
 
 			AABB2 boundary(0, 0, 0, 0);
-			boundary.min += spread / fovY * size;
-			boundary.max -= spread / fovY * size;
+			boundary.min += spreadDistance;
+			boundary.max -= spreadDistance;
 
-			IntVector3 center;
-			center.x = (int)(sw * 0.5F);
-			center.y = (int)size;
+			Vector2 center;
+			center.x = sw * 0.5F;
+			center.y = sh * 0.5F;
 
-			IntVector3 p1 = center;
-			IntVector3 p2 = center;
+			Vector2 p1 = center;
+			Vector2 p2 = center;
 
 			p1.x += (int)floorf(boundary.min.x);
 			p1.y += (int)floorf(boundary.min.y);
@@ -457,10 +470,10 @@ namespace spades {
 			p2.y += (int)ceilf(boundary.max.y);
 
 			renderer->SetColorAlphaPremultiplied(MakeVector4(0, 0, 0, 1));
-			renderer->DrawOutlinedRect((float)p1.x, (float)p1.y, (float)p2.x, (float)p2.y);
+			renderer->DrawOutlinedRect(p1.x, p1.y, p2.x, p2.y);
 
 			renderer->SetColorAlphaPremultiplied(MakeVector4(1, 1, 1, 1));
-			renderer->DrawOutlinedRect(p1.x + 1.0F, p1.y + 1.0F, p2.x - 1.0F, p2.y - 1.0F);
+			renderer->DrawOutlinedRect(p1.x + 1, p1.y + 1, p2.x - 1, p2.y - 1);
 		}
 
 		void Client::DrawFirstPersonHUD() {
@@ -490,8 +503,14 @@ namespace spades {
 				DrawDebugAim();
 		}
 
-		void Client::DrawJoinedAlivePlayerHUD(float x, float y, float w, float h) {
+		void Client::DrawJoinedAlivePlayerHUD() {
 			SPADES_MARK_FUNCTION();
+
+			float sw = renderer->ScreenWidth();
+			float sh = renderer->ScreenHeight();
+
+			float x = sw - (int)cg_hudBorderX;
+			float y = sh - (int)cg_hudBorderY;
 
 			// Draw damage rings
 			hurtRingView->Draw();
@@ -499,20 +518,28 @@ namespace spades {
 			Player& p = GetWorld()->GetLocalPlayer().value();
 
 			Weapon& weap = p.GetWeapon();
+			Player::ToolType tool = p.GetTool();
+
 			Handle<IImage> ammoIcon;
 			float iw, ih, spacing = 1.0F;
-			int clipNum, clipSize, stockNum;
+			int clipNum, clipSize, stockNum, stockMax;
 
 			Vector4 color = MakeVector4(1, 1, 1, 1);
 			Vector4 shadowColor = MakeVector4(0, 0, 0, 0.5);
 
-			switch (p.GetTool()) {
+			int ammoStyle = cg_hudAmmoStyle;
+
+			switch (tool) {
 				case Player::ToolSpade:
 				case Player::ToolBlock:
-					stockNum = p.GetNumBlocks();
+					ih = iw = 0.0F;
+					clipNum = stockNum = p.GetNumBlocks();
+					clipSize = stockMax = 50;
 					break;
 				case Player::ToolGrenade:
-					stockNum = p.GetNumGrenades();
+					ih = iw = 0.0F;
+					clipNum = stockNum = p.GetNumGrenades();
+					clipSize = stockMax = 3;
 					break;
 				case Player::ToolWeapon: {
 					switch (weap.GetWeaponType()) {
@@ -532,89 +559,78 @@ namespace spades {
 							iw = 8.0F;
 							ih = iw * 2.5F;
 							break;
-						default: SPInvalidEnum("weap->GetWeaponType()", weap.GetWeaponType());
+						default: SPInvalidEnum("weap.GetWeaponType()", weap.GetWeaponType());
 					}
 
 					clipNum = weap.GetAmmo();
 					clipSize = weap.GetClipSize();
 					clipSize = std::max(clipSize, clipNum);
 
-					for (int i = 0; i < clipSize; i++) {
-						float ix = w - x - (float)(i + 1) * (iw + spacing);
-						float iy = h - y - ih;
+					if (ammoStyle != 1) {
+						for (int i = 0; i < clipSize; i++) {
+							float ix = x - ((float)(i + 1) * (iw + spacing));
+							float iy = y - ih;
 
-						renderer->SetColorAlphaPremultiplied((clipNum >= i + 1)
-							? color : MakeVector4(0.4F, 0.4F, 0.4F, 1));
-						renderer->DrawImage(ammoIcon, AABB2(ix, iy, iw, ih));
+							renderer->SetColorAlphaPremultiplied((clipNum >= i + 1)
+								? color : MakeVector4(0.4F, 0.4F, 0.4F, 1));
+							renderer->DrawImage(ammoIcon, AABB2(ix, iy, iw, ih));
+						}
 					}
 
 					stockNum = weap.GetStock();
+					stockMax = weap.GetMaxStock();
 				} break;
-				default:
-					ih = 0.0F;
-					clipNum = clipSize = 0;
-					SPInvalidEnum("p->GetTool()", p.GetTool());
+				default: SPInvalidEnum("p.GetTool()", tool);
 			}
 
 			// draw "press ... to reload"
-			{
+			if (tool == Player::ToolWeapon) {
 				std::string msg = "";
-
-				switch (p.GetTool()) {
-					case Player::ToolBlock:
-						if (p.GetNumBlocks() == 0)
-							msg = _Tr("Client", "Out of Blocks");
-						break;
-					case Player::ToolGrenade:
-						if (p.GetNumGrenades() == 0)
-							msg = _Tr("Client", "Out of Grenades");
-						break;
-					case Player::ToolWeapon: {
-						if (weap.IsReloading() || p.IsAwaitingReloadCompletion())
-							msg = _Tr("Client", "Reloading");
-						else if (weap.GetAmmo() == 0 && weap.GetStock() == 0)
-							msg = _Tr("Client", "Out of Ammo");
-						else if (weap.GetStock() > 0 && weap.GetAmmo() < weap.GetClipSize() / 4)
-							msg = _Tr("Client", "Press [{0}] to Reload", TrKey(cg_keyReloadWeapon));
-					} break;
-					default:; // no message
-				}
+				if (weap.IsReloading() || p.IsAwaitingReloadCompletion())
+					msg = _Tr("Client", "Reloading");
+				else if (stockNum > 0 && clipNum < (clipSize / 4))
+					msg = _Tr("Client", "Press [{0}] to Reload", TrKey(cg_keyReloadWeapon));
 
 				if (!msg.empty()) {
 					IFont& font = fontManager->GetGuiFont();
 					Vector2 size = font.Measure(msg);
-					Vector2 pos = MakeVector2((w - size.x) * 0.5F, h * 2.0F / 3.0F);
+					Vector2 pos = MakeVector2((sw - size.x) * 0.5F, sh * (2.0F / 3.0F));
 					font.DrawShadow(msg, pos, 1.0F, color, shadowColor);
 				}
 			}
 
 			// draw remaining ammo counter
 			{
-				float per = std::min((2.0F * clipNum) / (clipSize / 2), 1.0F);
-				color = MakeVector4(1, 1, per, 1);
+				float per = std::min((2.0F * stockNum) / (float)stockMax, 1.0F);
+				color = MakeVector4(1, per, per, 1);
 
-				IFont& font = fontManager->GetHudFont();
 				auto stockStr = ToString(stockNum);
+				if (ammoStyle == 1 && tool == Player::ToolWeapon)
+					stockStr = ToString(clipNum) + "-" + stockStr;
+
+				IFont& font = fontManager->GetSquareDesignFont();
 				Vector2 size = font.Measure(stockStr);
-				Vector2 pos = MakeVector2(w - x, h - y - ih) - size;
+				Vector2 pos = MakeVector2(x, y) - size;
+				if (ammoStyle != 1)
+					pos.y -= ih;
+
 				font.DrawShadow(stockStr, pos, 1.0F, color, shadowColor);
 			}
 
 			// draw player health
 			{
 				int hp = p.GetHealth();
-				float per = std::min(hp / 100.0F, 1.0F);
+				float per = hp / 100.0F;
 				color = MakeVector4(1, per, per, 1);
 
-				IFont& font = fontManager->GetHudFont();
 				auto healthStr = ToString(hp);
+				IFont& font = fontManager->GetSquareDesignFont();
 				Vector2 size = font.Measure(healthStr);
-				Vector2 pos = MakeVector2(x, h - y);
-				pos.y -= size.y;
+				Vector2 pos = MakeVector2(sw - x, y - size.y);
 				font.DrawShadow(healthStr, pos, 1.0F, color, shadowColor);
 			}
 
-			if (p.IsToolBlock())
+			if (tool == Player::ToolBlock)
 				paletteView->Draw();
 		}
 
@@ -726,14 +742,14 @@ namespace spades {
 					Vector2 pos = {posxyz.x, posxyz.y};
 
 					int damage = damages.damage;
-					auto damageStr = "-" + ToString(damage);
 
+					auto damageStr = "-" + ToString(damage);
 					IFont& font = fontManager->GetGuiFont();
 					Vector2 size = font.Measure(damageStr);
 					pos.x -= size.x * 0.5F;
 					pos.y -= size.y;
 
-					float per = std::min((100 - damage) / 100.0F, 1.0F);
+					float per = 1.0F - (damage / 100.0F);
 					font.DrawShadow(damageStr, pos, 1.0F, MakeVector4(1, per, per, fade),
 					                MakeVector4(0, 0, 0, 0.25F * fade));
 				}
@@ -749,7 +765,7 @@ namespace spades {
 			Player& p = GetWorld()->GetLocalPlayer().value();
 
 			std::string msg;
-			int secs = (int)p.GetTimeToNextRespawn();
+			int secs = (int)p.GetTimeToRespawn();
 			if (secs > 0) {
 				static int lastCount = 0;
 				if (lastCount != secs) {
@@ -779,10 +795,10 @@ namespace spades {
 		void Client::DrawSpectateHUD() {
 			SPADES_MARK_FUNCTION();
 
+			IFont& font = fontManager->GetGuiFont();
+
 			float sw = renderer->ScreenWidth();
 			float sh = renderer->ScreenHeight();
-
-			IFont& font = fontManager->GetGuiFont();
 
 			float x = sw - 8.0F;
 			float minY = sh * 0.5F;
@@ -845,78 +861,79 @@ namespace spades {
 			float sw = renderer->ScreenWidth();
 			float sh = renderer->ScreenHeight();
 
-			IFont& font = fontManager->GetGuiFont();
-
 			const float fadeOutTime = 1.0F;
-			float fade = 1.0F - (time - alertDisappearTime) / fadeOutTime;
+			float fade = 1.0F - ((time - alertDisappearTime) / fadeOutTime);
 			fade = std::min(fade, 1.0F);
 			if (fade <= 0.0F)
 				return;
 
-			float borderFade = 1.0F - (time - alertAppearTime) * 1.5F;
+			float borderFade = 1.0F - ((time - alertAppearTime) / 0.5F);
 			borderFade = Clamp(borderFade, 0.0F, 1.0F);
 
 			Handle<IImage> alertIcon = renderer->RegisterImage("Gfx/AlertIcon.png");
 
-			Vector2 txtSiz = font.Measure(alertContents);
-			Vector2 cntsSiz = txtSiz;
-			cntsSiz.y = std::max(cntsSiz.y, 16.0F);
-
+			IFont& font = fontManager->GetGuiFont();
+			Vector2 textSize = font.Measure(alertContents);
+			Vector2 contentsSize = textSize;
+			contentsSize.y = std::max(contentsSize.y, 16.0F);
 			if (alertType != AlertType::Notice)
-				cntsSiz.x += 22.0F;
+				contentsSize.x += 22.0F;
 
 			// add margin
-			const float margin = 8.0F;
-			cntsSiz += margin * 2.0F;
-			cntsSiz.x = floorf(cntsSiz.x);
-			cntsSiz.y = floorf(cntsSiz.y);
+			const float margin = 4.0F;
+			contentsSize += margin * 2.0F;
+			contentsSize = contentsSize.Floor();
 
-			Vector2 pos = MakeVector2(sw, sh) - cntsSiz;
+			Vector2 pos = MakeVector2(sw, sh) - contentsSize;
 			pos *= MakeVector2(0.5F, 0.7F);
 			pos.y += 40.0F;
-
-			pos.x = floorf(pos.x);
-			pos.y = floorf(pos.y);
+			pos = pos.Floor();
 
 			Vector4 color;
 			switch (alertType) {
-				case AlertType::Notice: color = Vector4(0, 0, 0, 1); break;
-				case AlertType::Warning: color = Vector4(1, 1, 0, 1); break;
-				case AlertType::Error: color = Vector4(1, 0, 0, 1); break;
-				default: color = Vector4(0, 0, 0, 1); break;
+				case AlertType::Notice: color = MakeVector4(0, 0, 0, 1); break;
+				case AlertType::Warning: color = MakeVector4(1, 1, 0, 1); break;
+				case AlertType::Error: color = MakeVector4(1, 0, 0, 1); break;
+				default: color = MakeVector4(0, 0, 0, 1); break;
 			}
-			Vector4 shadow = {0, 0, 0, 0.5F * fade};
 
-			float bw = 1.0F;
-			float bh = 6.0F;
+			Vector4 shadowColor = MakeVector4(0, 0, 0, 0.5F * fade);
+
+			float x = pos.x - margin;
+			float y = pos.y;
+			float w = pos.x + contentsSize.x + margin;
+			float h = pos.y + contentsSize.y;
 
 			// draw background
-			renderer->SetColorAlphaPremultiplied(shadow);
-			renderer->DrawFilledRect(pos.x, pos.y + bh, pos.x + cntsSiz.x, pos.y + cntsSiz.y - bh);
+			renderer->SetColorAlphaPremultiplied(shadowColor);
+			renderer->DrawFilledRect(x + 1, y + 1, w - 1, h - 1);
 
 			// draw border
 			renderer->SetColorAlphaPremultiplied(color * fade * (1.0F - borderFade));
-			renderer->DrawOutlinedRect(pos.x - bw, pos.y - bw + bh, pos.x + cntsSiz.x + bw,
-			                           pos.y + cntsSiz.y + bw - bh);
+			renderer->DrawOutlinedRect(x, y, w, h);
 
-			bw += 8.0F * (1.0F - borderFade);
+			// draw fading border
+			float scale = 8.0F * (1.0F - borderFade);
 			renderer->SetColorAlphaPremultiplied(color * borderFade);
-			renderer->DrawOutlinedRect(pos.x - bw, pos.y - bw + bh, pos.x + cntsSiz.x + bw,
-			                           pos.y + cntsSiz.y + bw - bh);
+			renderer->DrawOutlinedRect(x - scale, y - scale, w + scale, h + scale);
 
 			// draw alert icon
 			if (alertType != AlertType::Notice) {
+				Vector2 iconPos = pos;
+				iconPos.x += margin;
+				iconPos.y += (contentsSize.y - 16.0F) * 0.5F;
+
 				renderer->SetColorAlphaPremultiplied(color * fade);
-				renderer->DrawImage(alertIcon, MakeVector2(pos.x + margin,
-					pos.y + (cntsSiz.y - 16.0F) * 0.5F));
+				renderer->DrawImage(alertIcon, iconPos);
 			}
 
 			// draw text
-			float x = pos.x + (cntsSiz.x - txtSiz.x) - margin;
-			float y = pos.y + (cntsSiz.y - txtSiz.y) - margin - 1.0F;
+			Vector2 textPos = pos;
+			textPos.x += (contentsSize.x - textSize.x) - margin;
+			textPos.y += ((contentsSize.y - textSize.y) * 0.5F) - 1.0F;
 
 			color = MakeVector4(1, 1, 1, 1) * fade;
-			font.DrawShadow(alertContents, MakeVector2(x, y), 1.0F, color, shadow);
+			font.DrawShadow(alertContents, textPos, 1.0F, color, shadowColor);
 		}
 
 		void Client::Draw2DWithWorld() {
@@ -925,14 +942,8 @@ namespace spades {
 			for (const auto& ent : localEntities)
 				ent->Render2D();
 
-			float x = cg_hudBorderX;
-			float y = cg_hudBorderY;
-
 			float sw = renderer->ScreenWidth();
 			float sh = renderer->ScreenHeight();
-
-			// TODO: this should be done only for chat window https://github.com/yvt/openspades/issues/810
-			bool shouldDraw = !cg_hideHud || AcceptsTextInput();
 
 			// fade the map (draw)
 			float fade = Clamp((world->GetTime() - 1.0F) / 2.2F, 0.0F, 1.0F);
@@ -948,12 +959,17 @@ namespace spades {
 					DrawHurtScreenEffect();
 				}
 
-				if (cg_playerNames)
-					DrawHottrackedPlayerName();
-				if (cg_damageIndicators)
-					DrawDamageIndicators();
+				bool localPlayerIsSpectator = p->IsSpectator();
+				if (!localPlayerIsSpectator) {
+					if (cg_playerNames)
+						DrawHottrackedPlayerName();
+					if (cg_damageIndicators)
+						DrawDamageIndicators();
+				} else {
+					DrawPubOVL();
+				}
 
-				if (shouldDraw) {
+				if (!cg_hideHud) {
 					tcView->Draw();
 
 					if (IsFirstPerson(GetCameraMode()))
@@ -963,21 +979,20 @@ namespace spades {
 					if (!largeMapView->IsZoomed())
 						mapView->Draw();
 
-					if (!p->IsSpectator()) { // player is not spectator
+					if (!localPlayerIsSpectator) { // player is not spectator
 						if (cg_playerStats)
 							DrawPlayerStats();
 						if (!p->IsToolBlock() && !debugHitTestZoom)
 							DrawHitTestDebugger();
 
 						if (p->IsAlive()) {
-							DrawJoinedAlivePlayerHUD(x, y, sw, sh);
+							DrawJoinedAlivePlayerHUD();
 						} else {
 							DrawDeadPlayerHUD();
 							DrawSpectateHUD();
 						}
 					} else {
 						DrawSpectateHUD();
-						DrawPubOVL();
 					}
 
 					chatWindow->Draw();
@@ -990,12 +1005,16 @@ namespace spades {
 					// large map view should come in front
 					if (largeMapView->IsZoomed())
 						largeMapView->Draw();
+				} else {
+					// chat bypass cg_hideHud
+					if (AcceptsTextInput() || chatWindow->IsExpanded())
+						chatWindow->Draw();
 				}
 
 				centerMessageView->Draw();
 				if (scoreboardVisible) {
-					DrawPlayingTime();
 					scoreboard->Draw();
+					DrawPlayingTime();
 				}
 
 				// --- end "player is there" render
@@ -1010,7 +1029,7 @@ namespace spades {
 			if (IsLimboViewActive())
 				limbo->Draw();
 
-			if (cg_stats)
+			if (cg_stats && !cg_hideHud)
 				DrawStats();
 		}
 
@@ -1028,15 +1047,14 @@ namespace spades {
 			float prgX = (sw - prgW) * 0.5F;
 			float prgY = sh - 48.0F;
 
-			IFont& font = fontManager->GetGuiFont();
-
 			auto statusStr = net->GetStatusString();
+			IFont& font = fontManager->GetGuiFont();
 			Vector2 size = font.Measure(statusStr);
 			Vector2 pos = MakeVector2((sw - size.x) * 0.5F, prgY - 10.0F);
 			pos.y -= size.y;
 
-			Vector4 grayCol = {0.5, 0.5, 0.5, 1};
-			Vector3 blueCol = {0, 0.5, 1};
+			Vector4 grayCol = MakeVector4(0.5, 0.5, 0.5, 1);
+			Vector3 blueCol = MakeVector3(0, 0.5, 1);
 
 			font.Draw(statusStr, pos, 1.0F, grayCol);
 
@@ -1046,7 +1064,7 @@ namespace spades {
 
 			// Normal progress bar
 			if (net->GetStatus() == NetClientStatusReceivingMap) {
-				auto prg = mapReceivingProgressSmoothed;
+				float prg = mapReceivingProgressSmoothed;
 
 				float w = prgW * prg;
 				for (float x = 0; x < w; x++) {
@@ -1082,21 +1100,21 @@ namespace spades {
 
 			{
 				auto fps = (int)fpsCounter.GetFps();
-				if (fps > 0) {
-					sprintf(buf, "%dfps, ", fps);
-					str += buf;
+				if (fps <= 0) {
+					str += "fps:NA";
 				} else {
-					str += "fps: NA, ";
+					sprintf(buf, "%dfps", fps);
+					str += buf;
 				}
 			}
 			{
 				// Display world updates per second
 				auto ups = (int)upsCounter.GetFps();
-				if (ups > 0) {
-					sprintf(buf, "%dups, ", ups);
-					str += buf;
+				if (ups <= 0) {
+					str += ", ups:NA";
 				} else {
-					str += "ups: NA, ";
+					sprintf(buf, ", %dups", ups);
+					str += buf;
 				}
 			}
 
@@ -1104,29 +1122,36 @@ namespace spades {
 				auto ping = net->GetPing();
 				auto upbps = (int)(net->GetUplinkBps() / 1000);
 				auto downbps = (int)(net->GetDownlinkBps() / 1000);
-				sprintf(buf, "ping: %dms, up/down: %d/%dkbps", ping, upbps, downbps);
+				sprintf(buf, ", ping: %dms, up/down: %d/%dkbps", ping, upbps, downbps);
 				str += buf;
 			}
 
+			// add margin
+			const float margin = 4.0F;
 			IFont& font = fontManager->GetGuiFont();
-
-			Vector2 margin = {4.0F, 4.0F};
-
-			auto size = font.Measure(str) + (margin * 2.0F);
-			auto pos = (MakeVector2(sw, sh) - size);
+			Vector2 size = font.Measure(str) + (margin * 2.0F);
+			Vector2 pos = MakeVector2(sw, sh) - size;
 			pos.x *= 0.5F;
-			pos.y += margin.y;
+			pos.y += margin;
 
-			auto shadow = MakeVector4(0, 0, 0, 0.5);
+			float x = pos.x;
+			float y = pos.y + margin;
+			float w = pos.x + size.x;
+			float h = pos.y + size.y - margin;
 
-			renderer->SetColorAlphaPremultiplied(shadow);
-			renderer->DrawFilledRect(pos.x, pos.y + margin.y, pos.x + size.x,
-			                         pos.y + size.y - margin.y);
+			Vector4 color = MakeVector4(1, 1, 1, 1);
+			Vector4 shadowColor = MakeVector4(0, 0, 0, 0.5);
+
+			// draw background
+			renderer->SetColorAlphaPremultiplied(shadowColor);
+			renderer->DrawFilledRect(x + 1, y + 1, w - 1, h - 1);
+
+			// draw border
 			renderer->SetColorAlphaPremultiplied(MakeVector4(0, 0, 0, 1));
-			renderer->DrawOutlinedRect(pos.x, pos.y + margin.y, pos.x + size.x,
-			                           pos.y + size.y - margin.y);
+			renderer->DrawOutlinedRect(x, y, w, h);
 
-			font.DrawShadow(str, pos + margin, 1.0F, MakeVector4(1, 1, 1, 1), shadow);
+			// draw text
+			font.DrawShadow(str, pos + margin, 1.0F, color, shadowColor);
 		}
 
 		void Client::Draw2D() {

@@ -70,7 +70,7 @@ namespace spades {
 
 			Handle<GameMap> map;
 			std::unique_ptr<GameMapWrapper> mapWrapper;
-			float time = 0.0f;
+			float time = 0.0F;
 			IntVector3 fogColor;
 			Team teams[3];
 
@@ -138,10 +138,11 @@ namespace spades {
 				return teams[t];
 			}
 			std::string GetTeamName(int t) { return GetTeam(t).name; }
+			IntVector3 GetTeamColor(int t) { return GetTeam(t).color; }
 
 			PlayerPersistent& GetPlayerPersistent(int index);
-			int GetPlayerScore(int index) { return GetPlayerPersistent(index).kills; }
 			std::string GetPlayerName(int index) { return GetPlayerPersistent(index).name; }
+			int GetPlayerScore(int index) { return GetPlayerPersistent(index).kills; }
 
 			void CreateBlock(IntVector3 pos, IntVector3 color);
 			void DestroyBlock(std::vector<IntVector3>& pos);

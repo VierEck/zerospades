@@ -180,13 +180,13 @@ namespace spades {
 					break;
 				case SDL_WINDOWEVENT:
 					if (event.window.type == SDL_WINDOWEVENT_FOCUS_GAINED) {
-						SDL_ShowCursor(0);
 						SDL_SetRelativeMouseMode(SDL_TRUE);
+						SDL_ShowCursor(SDL_DISABLE);
 						m_active = true;
 					} else if (event.window.type == SDL_WINDOWEVENT_FOCUS_LOST) {
 						SDL_SetRelativeMouseMode(SDL_FALSE);
+						SDL_ShowCursor(SDL_ENABLE);
 						m_active = false;
-						SDL_ShowCursor(1);
 					}
 					break;
 				default: break;
@@ -415,8 +415,8 @@ namespace spades {
 		};
 
 		std::tuple<Handle<client::IRenderer>, Handle<Disposable>>
-		SDLRunner::CreateRenderer(SDL_Window* wnd) {
-			switch (GetRendererType()) {
+		SDLRunner::CreateRenderer(SDL_Window* wnd, RendererType type) {
+			switch (type) {
 				case RendererType::GL: {
 					auto glDevice = Handle<SDLGLDevice>::New(wnd).Cast<draw::IGLDevice>();
 					auto dummy = Handle<Disposable>::New(); // FIXME
@@ -442,8 +442,8 @@ namespace spades {
 				{
 					SDL_version linked;
 					SDL_GetVersion(&linked);
-					SPLog("SDL Version: %d.%d.%d %s", linked.major, linked.minor, linked.patch,
-					      SDL_GetRevision());
+					SPLog("SDL Version: %d.%d.%d %s", linked.major,
+						linked.minor, linked.patch, SDL_GetRevision());
 				}
 
 				std::string caption;
@@ -460,8 +460,7 @@ namespace spades {
 				auto rtype = GetRendererType();
 
 				Uint32 sdlFlags;
-
-				switch (GetRendererType()) {
+				switch (rtype) {
 					case RendererType::GL:
 						sdlFlags = SDL_WINDOW_OPENGL;
 						SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -475,11 +474,9 @@ namespace spades {
 				if (!m_hasSystemMenu)
 					sdlFlags |= r_fullscreen ? SDL_WINDOW_FULLSCREEN : 0;
 
-				int w = width;
-				int h = height;
-
-				SDL_Window* window = SDL_CreateWindow(caption.c_str(), SDL_WINDOWPOS_CENTERED,
-				                                      SDL_WINDOWPOS_CENTERED, w, h, sdlFlags);
+				SDL_Window* window = SDL_CreateWindow(caption.c_str(),
+					SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+					width, height, sdlFlags);
 
 				if (!window) {
 					std::string msg = SDL_GetError();
@@ -504,18 +501,19 @@ namespace spades {
 				}
 
 				SDL_SetRelativeMouseMode(SDL_FALSE);
-				SDL_ShowCursor(0);
+				SDL_ShowCursor(SDL_DISABLE);
 				m_active = true;
 
 				{
 					Handle<client::IRenderer> renderer;
 					Handle<Disposable> windowReference;
-					std::tie(renderer, windowReference) = CreateRenderer(window);
+					std::tie(renderer, windowReference) = CreateRenderer(window, rtype);
 
 					Handle<client::IAudioDevice> audio(CreateAudioDevice(), false);
 
 					if (rtype == RendererType::GL) {
-						if (r_vsync != 0 && SDL_GL_SetSwapInterval(r_vsync) != 0)
+						int vsync = r_vsync;
+						if (vsync != 0 && SDL_GL_SetSwapInterval(vsync) != 0)
 							SPRaise("SDL_GL_SetSwapInterval failed: %s", SDL_GetError());
 					}
 
