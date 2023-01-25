@@ -77,6 +77,8 @@ DEFINE_SPADES_SETTING(cg_dbgHitTestSize, "128");
 DEFINE_SPADES_SETTING(cg_damageIndicators, "1");
 DEFINE_SPADES_SETTING(cg_hurtScreenEffects, "1");
 
+DEFINE_SPADES_SETTING(cg_spectatorESP, "0");
+
 SPADES_SETTING(cg_minimapSize);
 
 namespace spades {
@@ -370,7 +372,40 @@ namespace spades {
 			}
 		}
 
-		void Client::DrawPubOVL() {
+		void Client::DrawESP(Player& p) {
+			Vector3 origin = p.GetEye();
+			float originY = p.GetInput().crouch ? 0.5F : 0.95F;
+			origin.z += originY;
+
+			Vector3 posxyz;
+			if (Project(origin, posxyz)) {
+				Vector2 pos = { posxyz.x, posxyz.y };
+
+				Vector3 dist = (origin - lastSceneDef.viewOrigin);
+				float angle = pow(atan2f(dist.z, dist.GetLength2D()), 2);
+				if (angle <= 1)
+					angle = 1;
+
+				float rectY = p.GetInput().crouch ? 0.654F : 1.0F;
+				//deuce height is 2,6 mapblocks when standing and 1,7 mapblocks when crouching. 1.7/2.6 ≈ 0.654
+
+				float aimdown = world->GetPlayer(followedPlayerId)->GetWeaponInput().secondary &&
+					world->GetPlayer(followedPlayerId)->IsToolWeapon() &&
+					GetCameraMode() != ClientCameraMode::Free ? 2.5F : 1.F;
+
+				SPADES_SETTING(cg_fov); float fov = cg_fov;
+
+				float persX = (500 / dist.GetLength()) * aimdown / (fov * 0.0165F);
+				float persY = (persX * 2 * rectY) / angle;
+
+				Vector4 color = ConvertColorRGBA(p.GetColor());
+				renderer->SetColorAlphaPremultiplied(MakeVector4(color.x, color.y, color.z, 1));
+				renderer->DrawOutlinedRect(pos.x + persX, pos.y + persY, pos.x - persX, pos.y - persY);
+			}
+		}
+
+		void Client::DrawPUBOVL() {
+
 			SPADES_MARK_FUNCTION();
 
 			Player& player = GetCameraTargetPlayer();
@@ -389,6 +424,16 @@ namespace spades {
 					continue;
 
 				DrawPlayerName(p, GetPlayerColor(p));
+
+				if (cg_spectatorESP) {
+					stmp::optional<Player&> pforNull = world->GetPlayer(followedPlayerId);
+					if (!pforNull)
+						followedPlayerId = world->GetLocalPlayerIndex().value();
+					if (&p == world->GetPlayer(followedPlayerId) && GetCameraMode() != ClientCameraMode::Free)
+						continue;
+
+					DrawESP(p);
+				}
 			}
 		}
 

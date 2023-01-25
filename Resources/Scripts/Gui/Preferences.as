@@ -659,6 +659,7 @@ namespace spades {
 			layouter.AddControl(_Tr("Preferences", "Toggle Hit Test Zoom"), "cg_keyToggleHitTestZoom");
 			layouter.AddToggleField(_Tr("Preferences", "Debug Weapon Spread"), "cg_debugAim");
 			layouter.AddToggleField(_Tr("Preferences", "Classic Viewmodel"), "cg_classicViewWeapon");
+            layouter.AddToggleField(_Tr("Preferences", "Spectator ESP"), "cg_spectatorESP");
 
 			layouter.AddHeading(_Tr("Preferences", "Minimap"));
 			layouter.AddSliderField(_Tr("Preferences", "Minimap Size"), "cg_minimapSize",

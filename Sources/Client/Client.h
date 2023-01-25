@@ -407,7 +407,8 @@ namespace spades {
 
 			void DrawPlayerName(Player& p, Vector4 col);
 			void DrawHottrackedPlayerName();
-			void DrawPubOVL();
+			void DrawESP(Player& p);
+			void DrawPUBOVL();
 
 			void DrawPlayingTime();
 			void DrawHurtScreenEffect();
