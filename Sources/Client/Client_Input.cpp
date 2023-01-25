@@ -378,11 +378,14 @@ namespace spades {
 								followCameraState.firstPerson = !followCameraState.firstPerson;
 							return;
 						} else if (CheckKey(cg_keyReloadWeapon, name) &&
-						           world->GetLocalPlayer()->IsSpectator() &&
-						           followCameraState.enabled) {
+						           world->GetLocalPlayer()->IsSpectator()) {
 							if (down) {
+								if (!followCameraState.enabled && followedPlayerId == world->GetLocalPlayerIndex().value()) {
+									FollowNextPlayer(false);
+									return;
+								}
 								// Unfollow
-								followCameraState.enabled = false;
+								followCameraState.enabled = !followCameraState.enabled;
 							}
 							return;
 						}

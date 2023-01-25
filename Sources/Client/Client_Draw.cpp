@@ -404,7 +404,7 @@ namespace spades {
 			}
 		}
 
-		void Client::DrawPUBOVL() {
+		void Client::DrawPubOVL() {
 
 			SPADES_MARK_FUNCTION();
 

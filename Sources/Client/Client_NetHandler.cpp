@@ -76,6 +76,8 @@ namespace spades {
 			freeCameraState.velocity = MakeVector3(0, 0, 0);
 			followAndFreeCameraState.yaw = -DEG2RAD(90);
 			followAndFreeCameraState.pitch = DEG2RAD(89);
+
+			followedPlayerId = world->GetLocalPlayerIndex().value();
 		}
 
 		void Client::PlayerCreatedBlock(Player& p) {
@@ -263,6 +265,10 @@ namespace spades {
 				// Still unable to find a substitute?
 				if (&GetCameraTargetPlayer() == &p)
 					followCameraState.enabled = false; // Turn off the follow cam mode
+			}
+
+			if (p.GetId() == followedPlayerId) {
+					followedPlayerId = world->GetLocalPlayerIndex().value();
 			}
 
 			std::string msg;
