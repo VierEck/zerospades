@@ -407,6 +407,7 @@ namespace spades {
 
 			void DrawPlayerName(Player& p, Vector4 col);
 			void DrawHottrackedPlayerName();
+			void DrawESP(Player& p);
 			void DrawPubOVL();
 
 			void DrawPlayingTime();

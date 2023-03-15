@@ -768,7 +768,7 @@ namespace spades {
 						int idx = i;
 						if (protocolVersion == 4) {
 							idx = r.ReadByte();
-							if (idx < 0 || idx >= properties->GetMaxNumPlayerSlots())
+							if (idx < 0)
 								SPRaise("Invalid player number %d received with WorldUpdate", idx);
 						}
 
@@ -954,7 +954,7 @@ namespace spades {
 					std::string name = r.ReadRemainingString();
 					// TODO: decode name?
 
-					if (pId < 0 || pId >= properties->GetMaxNumPlayerSlots()) {
+					if (pId < 0) {
 						SPLog("Ignoring invalid playerid %d (pyspades bug?: %s)", pId, name.c_str());
 						break;
 					}

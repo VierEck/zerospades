@@ -93,6 +93,9 @@ DEFINE_SPADES_SETTING(cg_keyAutoFocus, "MiddleMouseButton");
 SPADES_SETTING(s_volume);
 SPADES_SETTING(cg_debugHitTest);
 
+DEFINE_SPADES_SETTING(cg_keyPubovl, "F3"); //vier added: /pubovl macro
+DEFINE_SPADES_SETTING(cg_stringPubovl, "/pubovl");
+
 namespace spades {
 	namespace client {
 
@@ -378,11 +381,14 @@ namespace spades {
 								followCameraState.firstPerson = !followCameraState.firstPerson;
 							return;
 						} else if (CheckKey(cg_keyReloadWeapon, name) &&
-						           world->GetLocalPlayer()->IsSpectator() &&
-						           followCameraState.enabled) {
+						           world->GetLocalPlayer()->IsSpectator()) {
 							if (down) {
+								if (!followCameraState.enabled && followedPlayerId == world->GetLocalPlayerIndex().value()) {
+									FollowNextPlayer(false);
+									return;
+								}
 								// Unfollow
-								followCameraState.enabled = false;
+								followCameraState.enabled = !followCameraState.enabled;
 							}
 							return;
 						}
@@ -391,6 +397,10 @@ namespace spades {
 
 				if (world->GetLocalPlayer()) {
 					Player& p = world->GetLocalPlayer().value();
+
+					if (CheckKey(cg_keyPubovl, name) && down) {//vier added: /pubovl macro
+						net->SendChat(cg_stringPubovl, true);
+					}
 
 					if (name == "-" || name == "+") {
 						int volume = s_volume;
