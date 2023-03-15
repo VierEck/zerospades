@@ -47,6 +47,7 @@
 #include <Core/TMPUtils.h>
 
 DEFINE_SPADES_SETTING(cg_unicode, "1");
+DEFINE_SPADES_SETTING(cg_DemoRecord, "1");
 
 namespace spades {
 	namespace client {
@@ -403,6 +404,7 @@ namespace spades {
 				enet_host_destroy(host);
 			bandwidthMonitor.reset();
 			SPLog("ENet host destroyed");
+			DemoStopRecord();
 		}
 
 		void NetClient::Connect(const ServerAddress& hostname) {
@@ -512,6 +514,19 @@ namespace spades {
 
 				stmp::optional<NetPacketReader> readerOrNone;
 				if (event.type == ENET_EVENT_TYPE_RECEIVE) {
+					if (cg_DemoRecord && DemoStarted) {
+						if (event.packet->data[0] != 15) {
+							RegisterDemoPacket(event.packet);
+						} else {
+							int player_id = event.packet->data[1];
+							event.packet->data[1] = 33;
+							RegisterDemoPacket(event.packet);
+							event.packet->data[1] = player_id;
+						}
+					} else if (DemoStarted) {
+						DemoStopRecord(); //stop if disable midgame. but cant enable midgame again
+					}
+
 					readerOrNone.reset(event.packet);
 					auto& reader = readerOrNone.value();
 
@@ -1479,7 +1494,10 @@ namespace spades {
 			NetPacketWriter w(PacketTypeInputData);
 			w.WriteByte((uint8_t)GetLocalPlayer().GetId());
 			w.WriteByte(bits);
-			enet_peer_send(peer, 0, w.CreatePacket());
+
+			ENetPacket *pkt = w.CreatePacket();
+			enet_peer_send(peer, 0, pkt);
+			RegisterDemoPacket(pkt);
 		}
 
 		void NetClient::SendWeaponInput(WeaponInput inp) {
@@ -1495,7 +1513,10 @@ namespace spades {
 			NetPacketWriter w(PacketTypeWeaponInput);
 			w.WriteByte((uint8_t)GetLocalPlayer().GetId());
 			w.WriteByte(bits);
-			enet_peer_send(peer, 0, w.CreatePacket());
+
+			ENetPacket *pkt = w.CreatePacket();
+			enet_peer_send(peer, 0, pkt);
+			RegisterDemoPacket(pkt);
 		}
 
 		void NetClient::SendBlockAction(spades::IntVector3 v, BlockActionType type) {
@@ -1531,7 +1552,10 @@ namespace spades {
 			w.WriteByte((uint8_t)GetLocalPlayer().GetId());
 			w.WriteByte((uint8_t)0); // clip_ammo; not used?
 			w.WriteByte((uint8_t)0); // reserve_ammo; not used?
-			enet_peer_send(peer, 0, w.CreatePacket());
+
+			ENetPacket *pkt = w.CreatePacket();
+			enet_peer_send(peer, 0, pkt);
+			RegisterDemoPacket(pkt);
 		}
 
 		void NetClient::SendHeldBlockColor() {
@@ -1540,7 +1564,10 @@ namespace spades {
 			NetPacketWriter w(PacketTypeSetColour);
 			w.WriteByte((uint8_t)GetLocalPlayer().GetId());
 			w.WriteColor(GetLocalPlayer().GetBlockColor());
-			enet_peer_send(peer, 0, w.CreatePacket());
+
+			ENetPacket *pkt = w.CreatePacket();
+			enet_peer_send(peer, 0, pkt);
+			RegisterDemoPacket(pkt);
 		}
 
 		void NetClient::SendTool() {
@@ -1555,7 +1582,10 @@ namespace spades {
 				case Player::ToolGrenade: w.WriteByte((uint8_t)3); break;
 				default: SPInvalidEnum("tool", GetLocalPlayer().GetTool());
 			}
-			enet_peer_send(peer, 0, w.CreatePacket());
+
+			ENetPacket *pkt = w.CreatePacket();
+			enet_peer_send(peer, 0, pkt);
+			RegisterDemoPacket(pkt);
 		}
 
 		void NetClient::SendGrenade(const Grenade& g) {
@@ -1566,7 +1596,10 @@ namespace spades {
 			w.WriteFloat(g.GetFuse());
 			w.WriteVector3(g.GetPosition());
 			w.WriteVector3(g.GetVelocity());
-			enet_peer_send(peer, 0, w.CreatePacket());
+
+			ENetPacket *pkt = w.CreatePacket();
+			enet_peer_send(peer, 0, pkt);
+			RegisterDemoPacket(pkt);
 		}
 
 		void NetClient::SendHit(int targetPlayerId, HitType type) {
@@ -1771,6 +1804,50 @@ namespace spades {
 			}
 
 			return text;
+		}
+
+		//from sByte: https://github.com/xtreme8000/BetterSpades/commit/1f7fd9169dd33647a1f4515c453cc65fec45dc54
+		struct Demo CurrentDemo;
+		static const struct Demo ResetStruct;
+
+		FILE* NetClient::CreateDemoFile(std::string file_name) {
+			FILE* file;
+			file = fopen(file_name.c_str(), "wb");
+
+			// aos_replay version + 0.75 version
+			unsigned char value = 1;
+			fwrite(&value, sizeof(value), 1, file);
+
+			value = 3;
+			fwrite(&value, sizeof(value), 1, file);
+
+			return file;
+		}
+
+		void NetClient::RegisterDemoPacket(ENetPacket *packet) {
+			if (!CurrentDemo.fp)
+				return;
+
+			float c_time = client->time - CurrentDemo.start_time;
+			unsigned short len = packet->dataLength;
+
+			fwrite(&c_time, sizeof(c_time), 1, CurrentDemo.fp);
+			fwrite(&len, sizeof(len), 1, CurrentDemo.fp);
+			fwrite(packet->data, packet->dataLength, 1, CurrentDemo.fp);
+		}
+
+		void NetClient::DemoStartRecord(std::string file_name) {
+			CurrentDemo.fp = CreateDemoFile(file_name);
+			CurrentDemo.start_time = client->time;
+			DemoStarted = true;
+		}
+
+		void NetClient::DemoStopRecord() {
+			DemoStarted = false;
+			if (CurrentDemo.fp)
+				fclose(CurrentDemo.fp);
+
+			CurrentDemo = ResetStruct;
 		}
 	} // namespace client
 } // namespace spades

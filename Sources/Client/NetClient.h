@@ -37,6 +37,8 @@
 #include <Core/VersionInfo.h>
 #include <OpenSpades.h>
 
+#include <enet/enet.h>
+
 struct _ENetHost;
 struct _ENetPeer;
 typedef _ENetHost ENetHost;
@@ -196,6 +198,16 @@ namespace spades {
 
 			double GetDownlinkBps() { return bandwidthMonitor->GetDownlinkBps(); }
 			double GetUplinkBps() { return bandwidthMonitor->GetUplinkBps(); }
+
+			FILE* CreateDemoFile(std::string);
+			void RegisterDemoPacket(ENetPacket *packet);
+			void DemoStartRecord(std::string);
+			void DemoStopRecord();
+			bool DemoStarted = false;
+		};
+		struct Demo {
+			FILE* fp;
+			time_t start_time;
 		};
 	} // namespace client
 } // namespace spades

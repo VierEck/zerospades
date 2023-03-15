@@ -113,7 +113,7 @@ namespace spades {
 			std::unique_ptr<GameMapWrapper> mapWrapper;
 			Handle<IRenderer> renderer;
 			Handle<IAudioDevice> audioDevice;
-			float time;
+			//float time;
 			bool readyToClose;
 			float worldSubFrame;
 
@@ -532,6 +532,8 @@ namespace spades {
 			void LocalPlayerHurt(HurtType type, Vector3 source) override;
 			void LocalPlayerBuildError(BuildFailureReason reason) override;
 			// IWorldListener end
+
+			float time;
 		};
 	} // namespace client
 } // namespace spades
