@@ -639,8 +639,6 @@ namespace spades {
 
 			layouter.AddHeading(_Tr("Preferences", "Demo Recording"));
 			layouter.AddToggleField(_Tr("Preferences", "Enable Demo Recording"), "cg_DemoRecord");
-			layouter.AddParag(_Tr("Preferences", "instantly ends demo if disabled while connected. however u cant start"));
-			layouter.AddParag(_Tr("Preferences", "a demo while connected as mapdata would be missing by that point. "));
 
 			layouter.AddHeading(_Tr("Preferences", "AoS 0.75/0.76 Compatibility"));
 			layouter.AddToggleField(_Tr("Preferences", "Allow Unicode"), "cg_unicode");
