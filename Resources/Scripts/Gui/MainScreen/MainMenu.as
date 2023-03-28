@@ -75,7 +75,7 @@ namespace spades {
 		spades::ui::ListView@ serverList;
 		MainScreenServerListLoadingView@ loadingView;
 		MainScreenServerListErrorView@ errorView;
-		bool loading = false, loaded = false;
+		bool loading = false, loaded = false, Replay = false;
 
 		private ConfigItem cg_protocolVersion("cg_protocolVersion", "3");
 		private ConfigItem cg_lastQuickConnectHost("cg_lastQuickConnectHost", "127.0.0.1");
@@ -204,14 +204,14 @@ namespace spades {
 			}
 			{
 				ServerListHeader header(Manager);
-				header.Bounds = AABB2(contentsLeft + 2.0F, 240.0F, 260.0F, 30.0F);
+				header.Bounds = AABB2(contentsLeft + 2.0F, 240.0F, 290.0F, 30.0F);
 				header.Text = _Tr("MainScreen", "Server Name");
 				@header.Activated = spades::ui::EventHandler(this.SortServerListByName);
 				AddChild(header);
 			}
 			{
 				ServerListHeader header(Manager);
-				header.Bounds = AABB2(contentsLeft + 260.0F, 240.0F, 70.0F, 30.0F);
+				header.Bounds = AABB2(contentsLeft + 290.0F, 240.0F, 40.0F, 30.0F);
 				header.Text = _Tr("MainScreen", "Slots");
 				@header.Activated = spades::ui::EventHandler(this.SortServerListByNumPlayers);
 				AddChild(header);
@@ -263,6 +263,13 @@ namespace spades {
 				errorView.Visible = false;
 				AddChild(errorView);
 			}
+			{
+				spades::ui::Button button(Manager);
+				button.Caption = _Tr("MainScreen", "Demo List / Server List");
+				button.Bounds = AABB2(contentsLeft, 165, 180.f, 30.f);
+				@button.Activated = spades::ui::EventHandler(this.OnChangeListPressed);
+				AddChild(button);
+            }
 			LoadServerList();
 		}
 
@@ -274,12 +281,16 @@ namespace spades {
 			@serverList.Model = spades::ui::ListViewModel(); // empty
 			errorView.Visible = false;
 			loadingView.Visible = true;
-			helper.StartQuery();
+			helper.StartQuery(Replay);
 		}
 
 		void ServerListItemActivated(ServerListModel@ sender, MainScreenServerItem@ item) {
-			addressField.Text = item.Address;
-			cg_lastQuickConnectHost = addressField.Text;
+			if (!Replay) {
+				addressField.Text = item.Address;
+				cg_lastQuickConnectHost = addressField.Text;
+			} else {
+				addressField.Text = item.Name;
+			}
 			if (item.Protocol == "0.75") {
 				SetProtocolVersion(3);
 			} else if (item.Protocol == "0.76") {
@@ -300,13 +311,38 @@ namespace spades {
 			UpdateServerList();
 		}
 
-		private void SortServerListByPing(spades::ui::UIElement@ sender) { SortServerList(0); }
-		private void SortServerListByNumPlayers(spades::ui::UIElement@ sender) { SortServerList(1); }
+		private void SortServerListByPing(spades::ui::UIElement@ sender) { 
+			if (Replay) {
+				return;
+			}
+			SortServerList(0); 
+		}
+		private void SortServerListByNumPlayers(spades::ui::UIElement@ sender) { 
+			if (Replay) {
+				return;
+			}
+			SortServerList(1); 
+		}
 		private void SortServerListByName(spades::ui::UIElement@ sender) { SortServerList(2); }
-		private void SortServerListByMapName(spades::ui::UIElement@ sender) { SortServerList(3); }
-		private void SortServerListByGameMode(spades::ui::UIElement@ sender) { SortServerList(4); }
+		private void SortServerListByMapName(spades::ui::UIElement@ sender) {
+			if (Replay) {
+				return;
+			}
+			SortServerList(3); 
+		}
+		private void SortServerListByGameMode(spades::ui::UIElement@ sender) { 
+			if (Replay) {
+				return;
+			}
+			SortServerList(4); 
+		}
 		private void SortServerListByProtocol(spades::ui::UIElement@ sender) { SortServerList(5); }
-		private void SortServerListByCountry(spades::ui::UIElement@ sender) { SortServerList(6); }
+		private void SortServerListByCountry(spades::ui::UIElement@ sender) { 
+			if (Replay) {
+				return;
+			}
+			SortServerList(6); 
+		}
 
 		private void SortServerList(int keyId) {
 			int sort = cg_serverlistSort.IntValue;
@@ -330,6 +366,11 @@ namespace spades {
 				case 5: key = "Protocol"; break;
 				case 6: key = "Country"; break;
 			}
+			if (Replay) {
+				if (key != "Protocol") {
+					key = "Name";
+				}
+			}
 			MainScreenServerItem @[] @list =
 				helper.GetServerList(key, (cg_serverlistSort.IntValue & 0x4000) != 0);
 			if ((list is null) or loading) {
@@ -350,15 +391,17 @@ namespace spades {
 					continue;
 				if (filterProtocol4 and (item.Protocol != "0.76"))
 					continue;
-				if (filterEmpty and (item.NumPlayers > 0))
-					continue;
-				if (filterFull and (item.NumPlayers >= item.MaxPlayers))
-					continue;
-				if (filterText.length > 0) {
-					if (not(StringContainsCaseInsensitive(item.Name, filterText)
-						 or StringContainsCaseInsensitive(item.MapName, filterText)
-						 or StringContainsCaseInsensitive(item.GameMode, filterText))) {
+				if (!Replay) {
+					if (filterEmpty and (item.NumPlayers > 0))
 						continue;
+					if (filterFull and (item.NumPlayers >= item.MaxPlayers))
+						continue;
+					if (filterText.length > 0) {
+						if (not(StringContainsCaseInsensitive(item.Name, filterText)
+							or StringContainsCaseInsensitive(item.MapName, filterText)
+							or StringContainsCaseInsensitive(item.GameMode, filterText))) {
+							continue;
+						}
 					}
 				}
 				list2.insertLast(item);
@@ -394,6 +437,9 @@ namespace spades {
 		}
 
 		private void OnAddressChanged(spades::ui::UIElement@ sender) {
+			if (Replay) {
+				return;
+			}
 			cg_lastQuickConnectHost = addressField.Text;
 		}
 
@@ -403,8 +449,18 @@ namespace spades {
 			cg_protocolVersion = ver;
 		}
 
-		private void OnProtocol3Pressed(spades::ui::UIElement@ sender) { SetProtocolVersion(3); }
-		private void OnProtocol4Pressed(spades::ui::UIElement@ sender) { SetProtocolVersion(4); }
+		private void OnProtocol3Pressed(spades::ui::UIElement@ sender) { 
+			if (Replay) {
+				return;
+			}
+			SetProtocolVersion(3); 
+		}
+		private void OnProtocol4Pressed(spades::ui::UIElement@ sender) {
+			if (Replay) {
+				return;
+			}
+			SetProtocolVersion(4); 
+		}
 
 		private void OnFilterProtocol3Pressed(spades::ui::UIElement@ sender) {
 			filterProtocol4Button.Toggled = false;
@@ -415,10 +471,16 @@ namespace spades {
 			UpdateServerList();
 		}
 		private void OnFilterFullPressed(spades::ui::UIElement@ sender) {
+			if (Replay) {
+				return;
+			}
 			filterEmptyButton.Toggled = false;
 			UpdateServerList();
 		}
 		private void OnFilterEmptyPressed(spades::ui::UIElement@ sender) {
+			if (Replay) {
+				return;
+			}
 			filterFullButton.Toggled = false;
 			UpdateServerList();
 		}
@@ -439,7 +501,15 @@ namespace spades {
 		}
 
 		private void Connect() {
-			string msg = helper.ConnectServer(addressField.Text, cg_protocolVersion.IntValue);
+			if (addressField.Text == "") {
+				return;
+			}
+			string DemoFile = ""; 
+			if (Replay) {
+				DemoFile = "Demos/" + addressField.Text; //test
+				addressField.Text = "aos://16777343:32887";
+			}
+            string msg = helper.ConnectServer(addressField.Text, cg_protocolVersion.IntValue, Replay, DemoFile);
 			if (msg.length > 0) {
 				// failde to initialize client.
 				AlertScreen al(this, msg);
@@ -486,6 +556,17 @@ namespace spades {
 					al.Run();
 				}
 			}
+		}
+		
+		private void OnChangeListPressed(spades::ui::UIElement@ sender) {
+			//change list
+			Replay = !Replay;
+			if (Replay) {
+				addressField.Text = "";
+			} else {
+				addressField.Text = cg_lastQuickConnectHost.StringValue;
+			}
+            LoadServerList();
 		}
 	}
 }

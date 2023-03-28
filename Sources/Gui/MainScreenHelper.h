@@ -96,11 +96,11 @@ namespace spades {
 			void SetServerFavorite(std::string ip, bool favorite);
 
 			bool PollServerListState();
-			void StartQuery();
+			void StartQuery(bool replay);
 			CScriptArray *GetServerList(std::string sortKey, bool descending);
 			std::string GetServerListQueryMessage();
 
-			std::string ConnectServer(std::string hostname, int protocolVersion);
+			std::string ConnectServer(std::string hostname, int protocolVersion, bool replay, std::string demo_name);
 			std::string GetPendingErrorMessage();
 
 			std::string GetCredits();

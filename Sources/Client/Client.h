@@ -113,7 +113,7 @@ namespace spades {
 			std::unique_ptr<GameMapWrapper> mapWrapper;
 			Handle<IRenderer> renderer;
 			Handle<IAudioDevice> audioDevice;
-			//float time;
+			float time;
 			bool readyToClose;
 			float worldSubFrame;
 
@@ -443,7 +443,7 @@ namespace spades {
 
 		public:
 			Client(Handle<IRenderer>, Handle<IAudioDevice>,
-				const ServerAddress& host, Handle<FontManager>);
+				const ServerAddress& host, Handle<FontManager>, bool replay, std::string demo_name);
 
 			void RunFrame(float dt) override;
 			void RunFrameLate(float dt) override;
@@ -533,7 +533,10 @@ namespace spades {
 			void LocalPlayerBuildError(BuildFailureReason reason) override;
 			// IWorldListener end
 
-			float time;
+			float GetTimeGlobal() { return time; }
+
+			bool Replaying;
+			std::string demo_file;
 		};
 	} // namespace client
 } // namespace spades

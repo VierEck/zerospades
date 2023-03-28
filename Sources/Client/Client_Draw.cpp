@@ -1118,7 +1118,7 @@ namespace spades {
 				}
 			}
 
-			if (net) {
+			if (net && !Replaying) {
 				auto ping = net->GetPing();
 				auto upbps = (int)(net->GetUplinkBps() / 1000);
 				auto downbps = (int)(net->GetDownlinkBps() / 1000);

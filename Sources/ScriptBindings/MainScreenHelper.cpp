@@ -48,7 +48,7 @@ namespace spades {
 					  "MainScreenHelper", asBEHAVE_RELEASE, "void f()",
 					  asMETHOD(gui::MainScreenHelper, Release), asCALL_THISCALL);
 					manager->CheckError(r);
-					r = eng->RegisterObjectMethod("MainScreenHelper", "void StartQuery()",
+					r = eng->RegisterObjectMethod("MainScreenHelper", "void StartQuery(bool)",
 					                              asMETHOD(gui::MainScreenHelper, StartQuery),
 					                              asCALL_THISCALL);
 					manager->CheckError(r);
@@ -70,7 +70,7 @@ namespace spades {
 					  asMETHOD(gui::MainScreenHelper, GetServerList), asCALL_THISCALL);
 					manager->CheckError(r);
 					r = eng->RegisterObjectMethod(
-					  "MainScreenHelper", "string ConnectServer(string, int)",
+					  "MainScreenHelper", "string ConnectServer(string, int, bool, string)",
 					  asMETHOD(gui::MainScreenHelper, ConnectServer), asCALL_THISCALL);
 					manager->CheckError(r);
 					r = eng->RegisterObjectMethod(

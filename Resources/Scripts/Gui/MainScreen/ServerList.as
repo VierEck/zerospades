@@ -69,7 +69,7 @@ namespace spades {
 				playersCol = Vector4(1.0F, 1.0F, 0.7F, col.w);
 			else if (item.NumPlayers == 0)
 				playersCol = Vector4(0.7F, 0.7F, 1.0F, col.w);
-			Font.Draw(playersStr, pos + Vector2(279.0F - Font.Measure(playersStr).x * 0.5F, 2.0F), 1.0F, playersCol);
+			Font.Draw(playersStr, pos + Vector2(305.0F - Font.Measure(playersStr).x * 0.5F, 2.0F), 1.0F, playersCol);
 
 			// Draw map name
 			Font.Draw(item.MapName, pos + Vector2(330.0F, 2.0F), 1.0F, col);
