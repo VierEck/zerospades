@@ -537,6 +537,11 @@ namespace spades {
 
 			bool Replaying;
 			std::string demo_file;
+			void SetFollowedPlayerId(int i) { followedPlayerId = i; }
+			int GetFollowedPlayerId() { return followedPlayerId; }
+			bool GetFollowMode() { return followCameraState.enabled; }
+			void SetFollowMode(bool enable) { followCameraState.enabled = enable; }
+			float DemoSpeedMultiplier;
 		};
 	} // namespace client
 } // namespace spades

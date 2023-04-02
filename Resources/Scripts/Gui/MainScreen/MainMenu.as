@@ -80,6 +80,7 @@ namespace spades {
 		private ConfigItem cg_protocolVersion("cg_protocolVersion", "3");
 		private ConfigItem cg_lastQuickConnectHost("cg_lastQuickConnectHost", "127.0.0.1");
 		private ConfigItem cg_serverlistSort("cg_serverlistSort", "16385");
+		MainScreenServerItem@[]@ savedlist = array<spades::MainScreenServerItem @>();
 
 		MainScreenMainMenu(MainScreenUI@ ui) {
 			super(ui.manager);
@@ -371,8 +372,7 @@ namespace spades {
 					key = "Name";
 				}
 			}
-			MainScreenServerItem @[] @list =
-				helper.GetServerList(key, (cg_serverlistSort.IntValue & 0x4000) != 0);
+			MainScreenServerItem @[] @list = helper.GetServerList(key, (cg_serverlistSort.IntValue & 0x4000) != 0);
 			if ((list is null) or loading) {
 				@serverList.Model = spades::ui::ListViewModel(); // empty
 				return;
@@ -384,7 +384,7 @@ namespace spades {
 			bool filterEmpty = filterEmptyButton.Toggled;
 			bool filterFull = filterFullButton.Toggled;
 			string filterText = filterField.Text;
-			MainScreenServerItem @[] @list2 = array<spades::MainScreenServerItem @>();
+			savedlist.resize(0);
 			for (int i = 0, count = list.length; i < count; i++) {
 				MainScreenServerItem@ item = list[i];
 				if (filterProtocol3 and (item.Protocol != "0.75"))
@@ -396,18 +396,18 @@ namespace spades {
 						continue;
 					if (filterFull and (item.NumPlayers >= item.MaxPlayers))
 						continue;
-					if (filterText.length > 0) {
-						if (not(StringContainsCaseInsensitive(item.Name, filterText)
-							or StringContainsCaseInsensitive(item.MapName, filterText)
-							or StringContainsCaseInsensitive(item.GameMode, filterText))) {
-							continue;
-						}
+				}
+				if(filterText.length > 0) {
+					if(not (StringContainsCaseInsensitive(item.Name, filterText) or
+						StringContainsCaseInsensitive(item.MapName, filterText) or
+						StringContainsCaseInsensitive(item.GameMode, filterText))) {
+						continue;
 					}
 				}
-				list2.insertLast(item);
+				savedlist.insertLast(item);
 			}
 
-			ServerListModel model(Manager, list2);
+			ServerListModel model(Manager, savedlist);
 			@serverList.Model = model;
 			@model.ItemActivated = ServerListItemEventHandler(this.ServerListItemActivated);
 			@model.ItemDoubleClicked = ServerListItemEventHandler(this.ServerListItemDoubleClicked);
@@ -505,11 +505,23 @@ namespace spades {
 				return;
 			}
 			string DemoFile = ""; 
+			string FieldText = addressField.Text;
 			if (Replay) {
-				DemoFile = "Demos/" + addressField.Text; //test
-				addressField.Text = "aos://16777343:32887";
+				bool Found = false; 
+				for(int i = 0, count = savedlist.length; i < count; i++) {
+					MainScreenServerItem@ item = savedlist[i];
+					if (item.Name == addressField.Text) {
+						Found = true;
+						break;
+					}
+				}
+				if (!Found) {
+					return;
+				}
+				DemoFile = "Demos/" + addressField.Text;
+				FieldText = "aos://16777343:32887";
 			}
-            string msg = helper.ConnectServer(addressField.Text, cg_protocolVersion.IntValue, Replay, DemoFile);
+            string msg = helper.ConnectServer(FieldText, cg_protocolVersion.IntValue, Replay, DemoFile);
 			if (msg.length > 0) {
 				// failde to initialize client.
 				AlertScreen al(this, msg);

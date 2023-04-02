@@ -204,9 +204,34 @@ namespace spades {
 			void DemoStart(std::string, bool replay);
 			void DemoStop();
 			bool DemoStarted = false;
+
 			void joinReplay();
 			void ReadNextDemoPacket();
 			void DoDemo();
+
+			bool DemoSkippingMap;
+			int GetDemoTimer();
+			std::string demo_end_time;
+			int demo_skip_time;
+			void DemoSkipMap();
+
+			void DemoCommands(std::string command);
+			void DemoCommandPause();
+			float demo_pause_time;
+			bool PauseDemo;
+			void DemoCommandUnpause(bool commanded);
+			void DemoCommandFF(int seconds);
+			void DemoCommandBB(int seconds);
+			void DemoCommandGT(std::string delta);
+			void DemoCommandSP(float speed);
+			int DemoStringToInt(std::string integer);
+			std::pair<int, bool> DemoFollowState;
+			void DemoCommandNextUps(int ups);
+			int demo_next_ups;
+			int demo_count_ups;
+			bool PrevUps;
+			void DemoCommandPrevUps(int ups);
+			void DemoCountUps();
 		};
 		struct Demo {
 			FILE* fp;

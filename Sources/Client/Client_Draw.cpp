@@ -1152,6 +1152,33 @@ namespace spades {
 
 			// draw text
 			font.DrawShadow(str, pos + margin, 1.0F, color, shadowColor);
+
+			if (Replaying) {
+				int currenttime = net->GetDemoTimer();
+				int hour = (int)currenttime / 3600;
+				int min  = ((int)currenttime % 3600) / 60;
+				int sec  = (int)currenttime % 60;
+				sprintf(buf, "Demo: %02d:%02d:%02d / ", hour, min, sec);
+				str = buf + net->demo_end_time;
+
+				size = font.Measure(str) + (margin * 2.0F);
+				pos = (MakeVector2(sw, sh) - size);
+				pos.x *= 0.5F;
+				pos.y *= 0.965f;
+
+				x = pos.x;
+				y = pos.y + margin;
+				w = pos.x + size.x;
+				h = pos.y + size.y - margin;
+
+				renderer->SetColorAlphaPremultiplied(shadowColor);
+				renderer->DrawFilledRect(x + 1, y + 1, w - 1, h - 1);
+
+				renderer->SetColorAlphaPremultiplied(MakeVector4(0, 0, 0, 1));
+				renderer->DrawOutlinedRect(x, y, w, h);
+
+				font.DrawShadow(str, pos + margin, 1.0F, color, shadowColor);
+			}
 		}
 
 		void Client::Draw2D() {

@@ -411,6 +411,9 @@ namespace spades {
 			DemoStop();
 		}
 
+		struct Demo CurrentDemo;
+		struct Demo ResetStruct;
+
 		void NetClient::Connect(const ServerAddress& hostname) {
 			SPADES_MARK_FUNCTION();
 
@@ -813,6 +816,10 @@ namespace spades {
 						}
 					}
 					SPAssert(r.ReadRemainingData().empty());
+
+					if (client->Replaying) {
+						DemoCountUps();
+					}
 				} break;
 				case PacketTypeInputData:
 					if (!GetWorld())
@@ -1383,7 +1390,8 @@ namespace spades {
 					p.SetTeam(team);
 				} break;
 				case PacketTypeChangeWeapon: {
-					Player& p = GetPlayer(r.ReadByte());
+					//Player& p = GetPlayer(r.ReadByte());
+					//lets not do this since main openspades doesnt do it either. caused a crash once for someone. 
 					int weapon = r.ReadByte();
 
 					WeaponType wType;
@@ -1632,8 +1640,10 @@ namespace spades {
 		}
 
 		void NetClient::SendChat(std::string text, bool global) {
-			if (client->Replaying)
+			if (client->Replaying) {
+				DemoCommands(text);
 				return;
+			}
 
 			SPADES_MARK_FUNCTION();
 
@@ -1837,10 +1847,6 @@ namespace spades {
 			return text;
 		}
 
-		//from sByte: https://github.com/xtreme8000/BetterSpades/commit/1f7fd9169dd33647a1f4515c453cc65fec45dc54
-		struct Demo CurrentDemo;
-		struct Demo ResetStruct;
-
 		FILE* NetClient::HandleDemoFile(std::string file_name, bool replay) {
 			FILE* file;
 			if (!replay) {
@@ -1877,6 +1883,19 @@ namespace spades {
 					}
 
 				}
+				float end_time;
+				unsigned short len;
+				while (fread(&end_time, sizeof(end_time), 1, file) == 1) {
+					fread(&len, sizeof(len), 1, file);
+					fseek(file, len, SEEK_CUR);
+				}
+				fseek(file, 2L, SEEK_SET);
+				int hour = (int)end_time / 3600;
+				int min  = ((int)end_time % 3600) / 60;
+				int sec  = (int)end_time % 60;
+				char buf[256];
+				sprintf(buf, "%02d:%02d:%02d", hour, min, sec);
+				demo_end_time = buf;
 
 				savedPackets.clear();
 
@@ -1910,6 +1929,8 @@ namespace spades {
 			CurrentDemo.start_time = client->GetTimeGlobal();
 			CurrentDemo.delta_time = 0.0f;
 			DemoStarted = !replay;
+			DemoSkippingMap = PauseDemo = false;
+			demo_skip_time = demo_pause_time = demo_count_ups = demo_next_ups = 0;
 		}
 
 		void NetClient::DemoStop() {
@@ -1933,6 +1954,239 @@ namespace spades {
 			NetPacketReader read(w.CreatePacket());
 
 			HandleGamePacket(read);
+			if (client->Replaying && DemoSkippingMap && demo_skip_time == 0) {
+				CurrentDemo.start_time = client->GetTimeGlobal() * client->DemoSpeedMultiplier - CurrentDemo.delta_time;
+				DemoSkippingMap = false;
+			}
+			if (PauseDemo) {
+				DemoCommandPause();
+			}
+		}
+
+		void NetClient::DemoCommands(std::string command) {
+			if (command == "pause") {
+				if (demo_pause_time == 0) {
+					DemoCommandPause();
+				} else {
+					DemoCommandUnpause(true);
+				}
+				return;
+			}
+			if (command == "unpause" && demo_pause_time != 0) {
+				DemoCommandUnpause(true);
+				return;
+			}
+
+			if ((int)command.size() <= 3)
+				return;
+
+			if (command.find( "sp ", 0) == 0) {//speed. set speed of demo time (slow down or speed up the demo)
+				command = command.substr(3, (int)command.size());
+				for (int i = 0; i < (int)command.size(); i++) {
+					if (!isdigit(command[i]) && command[i] != '.') {
+						return;
+					}
+				}
+				DemoCommandSP(std::stof(command));
+				return;
+			}
+			if (command.find( "gt ", 0 ) == 0) {//GoTo. set demo time. 
+				DemoCommandGT(command);
+				return;
+			}
+
+			int value = DemoStringToInt(command.substr(3, (int)command.size()));
+			if (value == -1 || value == 0) 
+				return;
+
+			if (command.find( "nu ", 0 ) == 0 && demo_pause_time != 0) {//next update. advance to next amount of world updates on pause (ups, update per second)
+				DemoCommandNextUps(value);
+				return;
+			}
+			if (command.find( "pu ", 0 ) == 0 && demo_pause_time != 0) {//prev update. rewind to previous amount of world updates on pause (ups, update per second)
+				DemoCommandPrevUps(value);
+				return;
+			}
+			if (command.find( "ff ", 0 ) == 0) {//fastforward
+				DemoCommandFF(value);
+				return;
+			}
+			if (command.find( "bb ", 0 ) == 0) {//rewind. actually starts all over again and fastforwards to time where u want to rewind to lol
+				DemoCommandBB(value);
+				return;
+			}
+		}
+
+		int NetClient::DemoStringToInt(std::string integer) {
+			for (int i = 0; i < (int)integer.size(); i++) {
+				if (!isdigit(integer[i])) {
+					return -1;
+				}
+			}
+			return std::stoi(integer);
+		}
+
+		void NetClient::DemoCommandPause() {
+			demo_pause_time = client->GetTimeGlobal();
+			PauseDemo = true;
+		}
+
+		void NetClient::DemoCommandUnpause(bool commanded) {
+			CurrentDemo.start_time = client->GetTimeGlobal() * client->DemoSpeedMultiplier - CurrentDemo.delta_time;
+			demo_pause_time = 0;
+			if (commanded) { //need to temporarily unpause during fastforward or rewind. only release pause when directly commanded.
+				PauseDemo = false;
+			}
+		}
+
+		void NetClient::DemoCommandFF(int seconds) {
+			if (seconds == 0 || seconds == -1) {
+				return;
+			}
+			if (PauseDemo) {
+				DemoCommandUnpause(false);
+			}
+			demo_skip_time = seconds;
+			CurrentDemo.start_time -= demo_skip_time;
+			DemoFollowState.first = client->GetFollowedPlayerId();
+			DemoFollowState.second = client->GetFollowMode();
+		}
+
+		void NetClient::DemoCommandBB(int seconds) {
+			if (fseek(CurrentDemo.fp, 2L, SEEK_SET) == 0) {
+				if (seconds == 0 || seconds == -1) {
+					return;
+				}
+				if (PauseDemo) {
+					DemoCommandUnpause(false);
+				}
+				demo_skip_time = seconds;
+				if (CurrentDemo.delta_time - demo_skip_time < 0) {
+					demo_skip_time = CurrentDemo.delta_time;
+				}
+				CurrentDemo.start_time = client->GetTimeGlobal() * client->DemoSpeedMultiplier - CurrentDemo.delta_time + demo_skip_time;
+				CurrentDemo.delta_time = demo_count_ups = 0;
+				DemoFollowState.first = client->GetFollowedPlayerId();
+				DemoFollowState.second = client->GetFollowMode();
+			}
+		}
+
+		void NetClient::DemoCommandGT(std::string delta) {
+			delta = delta.substr(3, (int)delta.size());
+			std::vector<int> timestamp;
+			int previndex = 0;
+			for (int i = 0; i < (int)delta.size(); i++) {
+				if ((int)timestamp.size() >= 3)
+					break;
+
+				if (delta[i] == ':') {
+					timestamp.push_back(DemoStringToInt(delta.substr(previndex, i - previndex)));
+					previndex = i + 1;
+				} else if (i == (int)delta.size() - 1) {
+					timestamp.push_back(DemoStringToInt(delta.substr(previndex, i - previndex + 1)));
+				}
+			}
+			previndex = (int)timestamp.size();
+			for (int i = previndex; i > 0; i--) {
+				//sec
+				if (i == previndex) {
+					if (previndex == 1 && timestamp[i - 1] > 60 * 60 * 10) //still allow pure second command. 10 hour cap here aswell. 
+						return;
+					if (previndex > 1 && timestamp[i - 1] > 59)
+						return;
+					demo_skip_time = timestamp[i - 1];
+				}
+				//min
+				if (i == previndex - 1) {
+					if (timestamp[i - 1] > 59)
+						return;
+					demo_skip_time += timestamp[i - 1] * 60;
+				}
+				//hour
+				if (i == previndex - 2) {
+					if (timestamp[i - 1] > 10) //10 hours is still an unreasonable length for a recording. this is very generous. 
+						return;
+					demo_skip_time += timestamp[i - 1] * 60 * 60;
+				}
+			}
+			if (demo_skip_time > CurrentDemo.delta_time) {
+				DemoCommandFF(demo_skip_time - (int)CurrentDemo.delta_time);
+			}
+			else if (demo_skip_time < CurrentDemo.delta_time) {
+				DemoCommandBB((int)CurrentDemo.delta_time - demo_skip_time);
+			}
+		}
+
+		void NetClient::DemoCommandSP(float speed) {
+			if (speed > 10 || speed < 0.1f) {
+				return;
+			}
+			client->DemoSpeedMultiplier = speed;
+			if (!PauseDemo) {
+				CurrentDemo.start_time = client->GetTimeGlobal() * speed - CurrentDemo.delta_time;
+			}
+		}
+
+		void NetClient::DemoCommandNextUps(int ups) {
+			if (ups == 0 || ups == -1) {
+				return;
+			}
+			demo_next_ups = ups;
+			DemoCommandUnpause(false);
+			CurrentDemo.start_time -= demo_next_ups * 10;
+			PrevUps = false;
+			DemoFollowState.first = client->GetFollowedPlayerId();
+			DemoFollowState.second = client->GetFollowMode();
+		}
+
+		void NetClient::DemoCommandPrevUps(int ups) {
+			if (fseek(CurrentDemo.fp, 2L, SEEK_SET) == 0) {
+				if (ups == 0 || ups == -1) {
+					return;
+				}
+				demo_next_ups = demo_count_ups - ups;
+				DemoCommandUnpause(false);
+				CurrentDemo.start_time = client->GetTimeGlobal() * client->DemoSpeedMultiplier - CurrentDemo.delta_time;
+				CurrentDemo.delta_time = demo_count_ups = 0;
+				demo_skip_time = 1;
+				PrevUps = true;
+				DemoFollowState.first = client->GetFollowedPlayerId();
+				DemoFollowState.second = client->GetFollowMode();
+			}
+		}
+
+		void NetClient::DemoCountUps() {
+			demo_count_ups += 1;
+			if (demo_next_ups != 0) {
+				if (!PrevUps) {
+					demo_next_ups -= 1;
+					if (demo_next_ups <= 0) {
+						client->SetFollowedPlayerId(DemoFollowState.first);
+						client->SetFollowMode(DemoFollowState.second);
+						CurrentDemo.start_time = client->GetTimeGlobal() * client->DemoSpeedMultiplier - CurrentDemo.delta_time;
+						DemoCommandPause();
+					}
+				} else {
+					if (demo_count_ups >= demo_next_ups) {
+						demo_next_ups = demo_skip_time = 0;
+						client->SetFollowedPlayerId(DemoFollowState.first);
+						client->SetFollowMode(DemoFollowState.second);
+						CurrentDemo.start_time = client->GetTimeGlobal() * client->DemoSpeedMultiplier - CurrentDemo.delta_time;
+						DemoCommandPause();
+					}
+				}
+			}
+		}
+
+		int NetClient::GetDemoTimer() {
+			return CurrentDemo.delta_time;
+		}
+
+		void NetClient::DemoSkipMap() {
+			if (!DemoSkippingMap && demo_skip_time == 0) {
+				CurrentDemo.start_time -= 300; //maptransfer cant be longer than 5 minutes. this is more than generous.
+				DemoSkippingMap = true;
+			}
 		}
 
 		void NetClient::ReadNextDemoPacket() {
@@ -1965,10 +2219,24 @@ namespace spades {
 		}
 
 		void NetClient::DoDemo() {
-			if (CurrentDemo.start_time + CurrentDemo.delta_time > client->GetTimeGlobal() || status == NetClientStatusNotConnected)
+			if (status == NetClientStatusNotConnected)
 				return;
 
-			while (CurrentDemo.start_time + CurrentDemo.delta_time <= client->GetTimeGlobal()) {
+			if (demo_pause_time != 0 && demo_skip_time == 0)
+				return;
+
+			if (demo_skip_time != 0 && CurrentDemo.start_time + CurrentDemo.delta_time >= client->GetTimeGlobal() * client->DemoSpeedMultiplier) {
+				demo_skip_time = 0;
+				client->SetFollowedPlayerId(DemoFollowState.first);
+				client->SetFollowMode(DemoFollowState.second);
+				if (status == NetClientStatusReceivingMap) {
+					DemoSkipMap();
+				} else if (PauseDemo) {
+					DemoCommandPause();
+				}
+			}
+			//ideally instead of repeating event handler here, maybe break the following part into a third function that would be used by both demo and event handler. 
+			while (CurrentDemo.start_time + CurrentDemo.delta_time < client->GetTimeGlobal() * client->DemoSpeedMultiplier) {
 				try {
 					ReadNextDemoPacket();
 				} catch (...) {
@@ -1989,6 +2257,7 @@ namespace spades {
 
 					status = NetClientStatusReceivingMap;
 					statusString = _Tr("Demo Replay", "Loading snapshot");
+					DemoSkipMap();
 				} else if (status == NetClientStatusReceivingMap) {
 					SPAssert(mapLoader);
 					if (reader.GetType() == PacketTypeMapChunk) {
@@ -2033,6 +2302,9 @@ namespace spades {
 				} else if (status == NetClientStatusConnected) {
 					try {
 						HandleGamePacket(reader);
+						if (reader.GetType() == PacketTypeMapStart) {
+							DemoSkipMap();
+						}
 					} catch (const std::exception& ex) {
 						int type = reader.GetType();
 						reader.DumpDebug();

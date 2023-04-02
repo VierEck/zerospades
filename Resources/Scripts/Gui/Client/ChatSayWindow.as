@@ -208,6 +208,83 @@ namespace spades {
 				@teamButton.Activated = spades::ui::EventHandler(this.OnSetTeam);
 				AddChild(teamButton);
 			}
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "Un/Pause");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f - 35.f, winY - 39.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnPause);
+                AddChild(ClientButton);
+            }
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "GoTo");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f - 35.f, winY - 70.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnGoTo);
+                AddChild(ClientButton);
+            }
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "Speed");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f - 35.f, winY - 100.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnSpeed);
+                AddChild(ClientButton);
+            }
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "FF 15");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f + 36.f, winY - 39.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnFFshort);
+                AddChild(ClientButton);
+            } 
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "BB 15");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f - 106.f, winY - 39.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnBBshort);
+                AddChild(ClientButton);
+            }
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "NU 1");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f + 107.f, winY - 39.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnNUshort);
+                AddChild(ClientButton);
+            }
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "PU 1");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f - 176.f, winY - 39.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnPUshort);
+                AddChild(ClientButton);
+            }
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "FForward");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f + 36.f, winY - 70.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnFForward);
+                AddChild(ClientButton);
+            } 
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "BBack");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f - 106.f, winY - 70.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnBBack);
+                AddChild(ClientButton);
+            }
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "NextUps");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f + 107.f, winY - 70.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnNextUps);
+                AddChild(ClientButton);
+            }
+			{
+                spades::ui::Button ClientButton(Manager);
+                ClientButton.Caption = _Tr("Client", "PrevUps");
+                ClientButton.Bounds = AABB2(winX + winW / 2.f - 176.f, winY - 70.f, 70.f, 30.f);
+                @ClientButton.Activated = spades::ui::EventHandler(this.OnPrevUps);
+                AddChild(ClientButton);
+			}
 		}
 
 		void UpdateState() { sayButton.Enable = field.Text.length > 0; }
@@ -285,6 +362,54 @@ namespace spades {
 			} else {
 				UIElement::HotKey(key);
 			}
+		}
+		
+		private void OnPause(spades::ui::UIElement@ sender) {
+           ui.helper.SayTeam("pause");
+		}
+		private void OnGoTo(spades::ui::UIElement@ sender) {
+           string str = "gt ";
+		   field.Text = field.Text + str;
+           field.Select(GetByteIndexForString(field.Text, str.length));
+		}
+		private void OnSpeed(spades::ui::UIElement@ sender) {
+           string str = "sp ";
+		   field.Text = field.Text + str;
+           field.Select(GetByteIndexForString(field.Text, str.length));
+		}
+
+		private void OnFFshort(spades::ui::UIElement@ sender) {
+           ui.helper.SayTeam("ff 15");
+		}
+		private void OnBBshort(spades::ui::UIElement@ sender) {
+           ui.helper.SayTeam("bb 15");
+		}
+		private void OnNUshort(spades::ui::UIElement@ sender) {
+           ui.helper.SayTeam("nu 1");
+		}
+		private void OnPUshort(spades::ui::UIElement@ sender) {
+           ui.helper.SayTeam("pu 1");
+		}
+
+		private void OnFForward(spades::ui::UIElement@ sender) {
+           string str = "ff ";
+		   field.Text = field.Text + str;
+           field.Select(GetByteIndexForString(field.Text, str.length));
+		}
+		private void OnBBack(spades::ui::UIElement@ sender) {
+           string str = "bb ";
+		   field.Text = field.Text + str;
+           field.Select(GetByteIndexForString(field.Text, str.length));
+		}
+		private void OnNextUps(spades::ui::UIElement@ sender) {
+           string str = "nu ";
+		   field.Text = field.Text + str;
+           field.Select(GetByteIndexForString(field.Text, str.length));
+		}
+		private void OnPrevUps(spades::ui::UIElement@ sender) {
+           string str = "pu ";
+		   field.Text = field.Text + str;
+           field.Select(GetByteIndexForString(field.Text, str.length));
 		}
 	}
 }
