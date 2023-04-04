@@ -946,10 +946,12 @@ namespace spades {
 			float sh = renderer->ScreenHeight();
 
 			// fade the map (draw)
-			float fade = Clamp((world->GetTime() - 1.0F) / 2.2F, 0.0F, 1.0F);
-			if (fade < 1.0F) {
-				renderer->SetColorAlphaPremultiplied(MakeVector4(0, 0, 0, 1.0F - fade));
-				renderer->DrawImage(nullptr, AABB2(0, 0, sw, sh));
+			if (!Replaying) { //prevent black screen when rewinding replay
+				float fade = Clamp((world->GetTime() - 1.0F) / 2.2F, 0.0F, 1.0F);
+				if (fade < 1.0F) {
+					renderer->SetColorAlphaPremultiplied(MakeVector4(0, 0, 0, 1.0F - fade));
+					renderer->DrawImage(nullptr, AABB2(0, 0, sw, sh));
+				}
 			}
 
 			stmp::optional<Player&> p = GetWorld()->GetLocalPlayer();
