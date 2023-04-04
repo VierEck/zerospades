@@ -215,6 +215,7 @@ namespace spades {
 			int demo_skip_time;
 			void DemoSkipMap();
 			bool DemoFirstJoined;
+			void DemoSetFollow();
 
 			void DemoCommands(std::string command);
 			void DemoCommandPause();

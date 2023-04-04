@@ -61,21 +61,25 @@ namespace spades {
 		void Client::JoinedGame() {
 			// Note: A localplayer doesn't exist yet
 
-			// Welcome players
-			auto msg = std::string(cg_playerName);
-			msg = _Tr("Client", "Welcome to the server, {0}!", msg);
-			centerMessageView->AddMessage(msg);
+			if (!Replaying || net->DemoFirstJoined) {
+				// Welcome players
+				auto msg = std::string(cg_playerName);
+				msg = _Tr("Client", "Welcome to the server, {0}!", msg);
+				centerMessageView->AddMessage(msg);
 
-			// Play intro sound
-			Handle<IAudioChunk> c = audioDevice->RegisterSound("Sounds/Feedback/Intro.opus");
-			audioDevice->PlayLocal(c.GetPointerOrNull(), AudioParam());
+				// Play intro sound
+				Handle<IAudioChunk> c = audioDevice->RegisterSound("Sounds/Feedback/Intro.opus");
+				audioDevice->PlayLocal(c.GetPointerOrNull(), AudioParam());
 
-			// Prepare the spectator view
-			followCameraState.enabled = false;
-			freeCameraState.position = lastSceneDef.viewOrigin;
-			freeCameraState.velocity = MakeVector3(0, 0, 0);
-			followAndFreeCameraState.yaw = -DEG2RAD(90);
-			followAndFreeCameraState.pitch = DEG2RAD(89);
+				// Prepare the spectator view
+				followCameraState.enabled = false;
+				freeCameraState.position = lastSceneDef.viewOrigin;
+				freeCameraState.velocity = MakeVector3(0, 0, 0);
+				followAndFreeCameraState.yaw = -DEG2RAD(90);
+				followAndFreeCameraState.pitch = DEG2RAD(89);
+
+				net->DemoFirstJoined = false;
+			}
 
 			followedPlayerId = world->GetLocalPlayerIndex().value();
 		}
