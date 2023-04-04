@@ -369,12 +369,12 @@ namespace spades {
 		}
 		private void OnGoTo(spades::ui::UIElement@ sender) {
            string str = "gt ";
-		   field.Text = field.Text + str;
+		   field.Text = str;
            field.Select(GetByteIndexForString(field.Text, str.length));
 		}
 		private void OnSpeed(spades::ui::UIElement@ sender) {
            string str = "sp ";
-		   field.Text = field.Text + str;
+		   field.Text = str;
            field.Select(GetByteIndexForString(field.Text, str.length));
 		}
 
@@ -393,22 +393,22 @@ namespace spades {
 
 		private void OnFForward(spades::ui::UIElement@ sender) {
            string str = "ff ";
-		   field.Text = field.Text + str;
+		   field.Text = str;
            field.Select(GetByteIndexForString(field.Text, str.length));
 		}
 		private void OnBBack(spades::ui::UIElement@ sender) {
            string str = "bb ";
-		   field.Text = field.Text + str;
+		   field.Text = str;
            field.Select(GetByteIndexForString(field.Text, str.length));
 		}
 		private void OnNextUps(spades::ui::UIElement@ sender) {
            string str = "nu ";
-		   field.Text = field.Text + str;
+		   field.Text =str;
            field.Select(GetByteIndexForString(field.Text, str.length));
 		}
 		private void OnPrevUps(spades::ui::UIElement@ sender) {
            string str = "pu ";
-		   field.Text = field.Text + str;
+		   field.Text = str;
            field.Select(GetByteIndexForString(field.Text, str.length));
 		}
 	}
