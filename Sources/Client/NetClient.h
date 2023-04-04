@@ -217,12 +217,15 @@ namespace spades {
 
 			void DemoCommands(std::string command);
 			void DemoCommandPause();
-			float demo_pause_time;
-			bool PauseDemo;
-			void DemoCommandUnpause(bool commanded);
+			bool DemoPaused;
+			bool PauseDemoAfterSkip;
+			void DemoCommandUnpause(bool skipped);
+
 			void DemoCommandFF(int seconds);
 			void DemoCommandBB(int seconds);
 			void DemoCommandGT(std::string delta);
+			float demo_skip_end_time;
+
 			void DemoCommandSP(float speed);
 			int DemoStringToInt(std::string integer);
 			std::pair<int, bool> DemoFollowState;

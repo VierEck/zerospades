@@ -196,7 +196,7 @@ namespace spades {
 			// physics diverges from server
 			world->Advance(dt);
 #else
-			if (!Replaying || (Replaying && (net->demo_pause_time == 0 || net->demo_skip_time != 0))) {
+			if (!Replaying || (Replaying && (!net->DemoPaused || net->demo_skip_time != 0))) {
 				// accurately resembles server's physics
 				// but not smooth
 				if (dt > 0.f)
